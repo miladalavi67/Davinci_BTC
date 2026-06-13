@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تحلیلگر بیت‌کوین</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  --bg:#0a0e14;--bg2:#111722;--bg3:#161e2b;--panel:#0d131c;
+  --border:#1e2a3a;--border2:#293849;
+  --txt:#d4dde8;--txt2:#6b8199;--txt3:#3d4f63;
+  --up:#26d97f;--down:#ff4d6a;--neutral:#f5b740;
+  --accent:#ff9332;--accent2:#5b8cff;--gold:#ffd24a;
+  --mono:'IBM Plex Mono',monospace;--sans:'Vazirmatn',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.6;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:
+  radial-gradient(ellipse 80% 50% at 50% -20%,rgba(255,147,50,.06),transparent),
+  radial-gradient(ellipse 60% 50% at 80% 100%,rgba(91,140,255,.04),transparent);
+  pointer-events:none;z-index:0}
+
+/* هدر */
+.top{position:sticky;top:0;z-index:50;background:rgba(10,14,20,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:14px 20px}
+.top-in{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#ff6b1a);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 20px rgba(255,147,50,.3)}
+.brand-txt h1{font-size:17px;font-weight:700;letter-spacing:-.01em}
+.brand-txt p{font-size:11px;color:var(--txt2);font-family:var(--mono)}
+.coins{margin-right:auto;display:flex;gap:5px;flex-wrap:wrap;max-width:760px}
+.coin-pill{font-family:var(--mono);font-size:12px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--txt2);cursor:pointer;transition:all .15s}
+.coin-pill:hover{border-color:var(--accent);color:var(--txt)}
+.coin-pill.on{background:var(--accent);color:#1a0c00;border-color:var(--accent);font-weight:600}
+.pill-dot{font-size:9px}
+
+/* نوار کاربری */
+.user-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.user-name{font-family:var(--mono);font-size:12px;color:var(--txt2);padding:5px 10px;background:var(--bg2);border-radius:7px}
+.user-btn{font-family:var(--sans);font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--bg2);color:var(--txt2);cursor:pointer;text-decoration:none;transition:all .15s}
+.user-btn:hover{border-color:var(--accent);color:var(--txt)}
+.user-btn.logout{border-color:rgba(255,77,106,.3);color:var(--down)}
+.user-btn.logout:hover{background:rgba(255,77,106,.1)}
+
+/* مودال */
+.modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modal-box{background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:22px;width:100%;max-width:440px;max-height:80vh;overflow-y:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;font-size:16px;font-weight:700}
+.modal-x{background:none;border:none;color:var(--txt2);font-size:18px;cursor:pointer}
+.modal-x:hover{color:var(--txt)}
+.modal-divider{font-size:12px;color:var(--txt2);font-family:var(--mono);margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border)}
+.modal-form{display:flex;gap:8px;flex-wrap:wrap}
+.modal-form input{flex:1;min-width:120px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--txt);font-family:var(--mono);font-size:13px}
+.modal-form input:focus{outline:none;border-color:var(--accent)}
+.btn-add{background:var(--accent);color:#1a0c00;border:none;border-radius:8px;padding:9px 16px;font-family:var(--sans);font-weight:600;font-size:13px;cursor:pointer}
+.users-list{display:flex;flex-direction:column;gap:6px}
+.user-item{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-family:var(--mono);font-size:13px}
+.user-role{font-size:10px;padding:2px 7px;border-radius:5px;background:var(--bg2)}
+.user-role.admin{color:var(--accent);border:1px solid rgba(255,147,50,.3)}
+.user-del{margin-right:auto;background:none;border:none;color:var(--down);cursor:pointer;font-size:13px}
+.user-msg{font-size:12px;margin-top:10px;font-family:var(--mono);min-height:18px}
+
+/* چارت و ستاپ */
+.chart-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.setup-badge{font-family:var(--mono);font-size:13px;font-weight:600;padding:7px 14px;border-radius:8px}
+.setup-none{background:var(--bg3);color:var(--txt2)}
+.setup-bull{background:rgba(38,217,127,.15);color:var(--up);border:1px solid rgba(38,217,127,.4)}
+.setup-bear{background:rgba(255,77,106,.15);color:var(--down);border:1px solid rgba(255,77,106,.4)}
+.setup-wait{background:rgba(245,183,64,.12);color:var(--neutral);border:1px solid rgba(245,183,64,.3)}
+.setup-detail{margin-top:14px;display:none}
+.setup-detail.show{display:block}
+.setup-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.setup-metric{font-family:var(--mono);font-size:12px;padding:5px 11px;border-radius:7px;background:var(--bg3)}
+.factor-chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:5px;background:rgba(38,217,127,.1);color:var(--up);border:1px solid rgba(38,217,127,.2)}
+.factor-chip.bear{background:rgba(255,77,106,.1);color:var(--down);border-color:rgba(255,77,106,.2)}
+
+/* بدنه */
+.wrap{max-width:1400px;margin:0 auto;padding:22px 20px 60px;position:relative;z-index:1}
+
+/* قهرمان: قیمت + بایاس */
+.hero{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:900px){.hero{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.hero-price{display:flex;flex-direction:column;justify-content:center}
+.hero-price .lbl{font-size:12px;color:var(--txt2);font-family:var(--mono);margin-bottom:4px}
+.hero-price .val{font-size:42px;font-weight:800;letter-spacing:-.02em;font-family:var(--mono);line-height:1}
+.hero-price .coin-name{font-size:14px;color:var(--accent);font-weight:600;margin-bottom:10px}
+.bias-box{display:flex;flex-direction:column;justify-content:center;gap:10px}
+.bias-title{font-size:12px;color:var(--txt2);font-family:var(--mono)}
+.bias-bar{height:34px;border-radius:10px;overflow:hidden;display:flex;background:var(--bg3);position:relative}
+.bias-fill{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:600;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.bias-bull{background:linear-gradient(90deg,rgba(38,217,127,.25),rgba(38,217,127,.5));color:var(--up)}
+.bias-bear{background:linear-gradient(90deg,rgba(255,77,106,.5),rgba(255,77,106,.25));color:#fff}
+.bias-verdict{font-size:14px;font-weight:600;text-align:center}
+
+/* گرید تایم‌فریم */
+.section-label{font-family:var(--mono);font-size:12px;color:var(--accent);margin:22px 0 12px;display:flex;align-items:center;gap:8px;letter-spacing:.05em}
+.section-label::before{content:'';width:3px;height:14px;background:var(--accent);border-radius:2px}
+.tf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:1100px){.tf-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.tf-grid{grid-template-columns:1fr}}
+.tf-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:15px;transition:border-color .15s}
+.tf-card:hover{border-color:var(--border2)}
+.tf-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.tf-name{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--gold)}
+.tf-trend{font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px}
+.t-bull{background:rgba(38,217,127,.12);color:var(--up)}
+.t-bear{background:rgba(255,77,106,.12);color:var(--down)}
+.t-range{background:rgba(245,183,64,.12);color:var(--neutral)}
+.tf-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px}
+.tf-row .k{color:var(--txt2);font-family:var(--mono)}
+.tf-row .v{font-family:var(--mono);font-weight:500}
+.chip{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:5px;background:var(--bg3);border:1px solid var(--border)}
+.up{color:var(--up)}.down{color:var(--down)}.neu{color:var(--neutral)}
+
+/* اوردر بلاک */
+.ob-list{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.ob-item{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg3)}
+.ob-bull{border-right:2px solid var(--up)}
+.ob-bear{border-right:2px solid var(--down)}
+
+/* ML سناریو */
+.ml-panel{background:linear-gradient(135deg,var(--panel),rgba(91,140,255,.04));border:1px solid var(--border)}
+.ml-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.ml-badge{font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:6px;background:rgba(91,140,255,.15);color:var(--accent2);border:1px solid rgba(91,140,255,.3)}
+.ml-prob{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+.prob-circle{position:relative;width:120px;height:120px;flex-shrink:0}
+.prob-circle svg{transform:rotate(-90deg)}
+.prob-circle .pct{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.prob-circle .pct .n{font-family:var(--mono);font-size:26px;font-weight:700}
+.prob-circle .pct .l{font-size:10px;color:var(--txt2)}
+.ml-detail{flex:1;display:flex;flex-direction:column;gap:7px}
+.ml-stat{display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono)}
+.ml-feat{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.disclaimer{font-size:11px;color:var(--txt3);line-height:1.7;margin-top:14px;padding:10px 12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)}
+
+/* overview */
+.ov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ov-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 13px;cursor:pointer;transition:all .15s}
+.ov-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.ov-coin{font-family:var(--mono);font-size:13px;font-weight:600;margin-bottom:3px}
+.ov-price{font-family:var(--mono);font-size:11px;color:var(--txt2)}
+.ov-trend{font-size:10px;margin-top:5px;padding:2px 6px;border-radius:4px;display:inline-block}
+
+.loading{text-align:center;padding:40px;color:var(--txt2);font-family:var(--mono);font-size:13px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:sp 0.7s linear infinite;vertical-align:middle;margin-left:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.btn{font-family:var(--mono);font-size:12px;padding:8px 16px;border-radius:8px;border:1px solid var(--accent2);background:rgba(91,140,255,.1);color:var(--accent2);cursor:pointer;transition:all .15s}
+.btn:hover{background:rgba(91,140,255,.2)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="top-in">
+    <div class="brand">
+      <div class="brand-mark">₿</div>
+      <div class="brand-txt"><h1>تحلیلگر بیت‌کوین</h1><p>multi-timeframe + AI</p></div>
+    </div>
+    <div class="coins" id="coins"></div>
+    <div class="user-bar">
+      <span class="user-name">👤 {{ user }}</span>
+      {% if role == 'admin' %}<button class="user-btn" onclick="openUsers()">مدیریت کاربران</button>{% endif %}
+      <button class="user-btn" onclick="openPwModal()">تغییر رمز</button>
+      <a href="/logout" class="user-btn logout">خروج</a>
+    </div>
+  </div>
+</div>
+
+<!-- مودال مدیریت کاربران -->
+<div class="modal" id="usersModal">
+  <div class="modal-box">
+    <div class="modal-head"><span>مدیریت کاربران</span><button class="modal-x" onclick="closeModal('usersModal')">✕</button></div>
+    <div id="usersList" class="users-list"></div>
+    <div class="modal-divider">افزودن کاربر جدید</div>
+    <div class="modal-form">
+      <input type="text" id="newUser" placeholder="نام کاربری (حداقل ۳ حرف)">
+      <input type="password" id="newPass" placeholder="رمز (حداقل ۶ حرف)">
+      <button class="btn-add" onclick="addUser()">افزودن</button>
+    </div>
+    <div id="userMsg" class="user-msg"></div>
+  </div>
+</div>
+
+<!-- مودال تغییر رمز -->
+<div class="modal" id="pwModal">
+  <div class="modal-box">
+    <div class="modal-head"><span>تغییر رمز عبور</span><button class="modal-x" onclick="closeModal('pwModal')">✕</button></div>
+    <div class="modal-form" style="flex-direction:column">
+      <input type="password" id="myNewPass" placeholder="رمز جدید (حداقل ۶ حرف)">
+      <button class="btn-add" onclick="changeMyPw()">ذخیره رمز جدید</button>
+    </div>
+    <div id="pwMsg" class="user-msg"></div>
+  </div>
+
+<div class="wrap">
+  <!-- قهرمان -->
+  <div class="hero">
+    <div class="panel hero-price">
+      <div class="coin-name" id="heroCoin">BITCOIN</div>
+      <div class="lbl">قیمت لحظه‌ای (USDT)</div>
+      <div class="val" id="heroPrice">—</div>
+    </div>
+    <div class="panel bias-box">
+      <div class="bias-title">جهت غالب (وزن‌دار بین تایم‌فریم‌ها)</div>
+      <div class="bias-bar" id="biasBar"><div class="bias-fill bias-bull" style="width:50%">۵۰٪</div><div class="bias-fill bias-bear" style="width:50%">۵۰٪</div></div>
+      <div class="bias-verdict" id="biasVerdict">در حال تحلیل…</div>
+    </div>
+  </div>
+
+  <!-- تایم‌فریم‌ها -->
+  <div class="section-label">تحلیل چند تایم‌فریم</div>
+  <div class="tf-grid" id="tfGrid"><div class="loading"><span class="spin"></span> در حال دریافت داده…</div></div>
+
+  <!-- چارت ۱ ساعته با تشخیص ستاپ -->
+  <div class="section-label">چارت ۱ ساعته + تشخیص ستاپ</div>
+  <div class="panel" id="chartPanel">
+    <div class="chart-head">
+      <div id="setupBadge" class="setup-badge setup-none">در حال بررسی ستاپ…</div>
+      <button class="btn" id="setupBtn" style="margin-right:auto" onclick="loadSetup()">بررسی ستاپ</button>
+    </div>
+    <div id="chartContainer" style="width:100%;height:340px;position:relative"></div>
+    <div id="setupDetail" class="setup-detail"></div>
+  </div>
+
+  <!-- ML -->
+  <div class="section-label">سناریو هوش مصنوعی (RandomForest + Backtesting)</div>
+  <div class="panel ml-panel" id="mlPanel">
+    <div class="ml-head">
+      <span class="ml-badge">AI</span>
+      <span style="font-size:13px;color:var(--txt2)">مدل از الگوهای گذشته یاد می‌گیرد و با backtest اعتبارسنجی می‌شود</span>
+      <button class="btn" id="mlBtn" style="margin-right:auto" onclick="loadML()">اجرای تحلیل AI</button>
+    </div>
+    <div id="mlContent"><div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن (چند ثانیه طول می‌کشد)</div></div>
+  </div>
+
+  <!-- نمای کلی -->
+  <div class="section-label">نمای کلی بازار</div>
+  <div class="ov-grid" id="ovGrid"><div class="loading"><span class="spin"></span></div></div>
+</div>
+
+<script>
+const COINS={{ coins|tojson }};
+const TFS={{ timeframes|tojson }};
+let CURRENT='BTCUSDT';
+
+const fa=n=>n==null?'—':Number(n).toLocaleString('fa-IR');
+const faNum=n=>String(n).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+function fp(p){if(p==null)return'—';return p>1000?Number(p).toLocaleString('en-US',{maximumFractionDigits:1}):p>1?Number(p).toFixed(3):Number(p).toFixed(5);}
+
+// pills
+const coinsEl=document.getElementById('coins');
+COINS.forEach(c=>{
+  const b=document.createElement('button');
+  b.className='coin-pill'+(c===CURRENT?' on':'');
+  b.textContent=c.replace('USDT','');
+  b.dataset.symbol=c;
+  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadAnalysis();loadChart();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
+  coinsEl.appendChild(b);
+});
+
+const trendCls=t=>t.includes('bull')?'t-bull':t.includes('bear')?'t-bear':'t-range';
+const trendTxt={strong_bull:'صعودی قوی',bull:'صعودی',range:'رنج',bear:'نزولی',strong_bear:'نزولی قوی'};
+
+async function loadAnalysis(){
+  document.getElementById('heroCoin').textContent=CURRENT.replace('USDT','').toUpperCase();
+  document.getElementById('tfGrid').innerHTML='<div class="loading"><span class="spin"></span> در حال تحلیل…</div>';
+  try{
+    const r=await fetch(`/api/analyze?symbol=${CURRENT}`);
+    const d=await r.json();
+    if(d.error){document.getElementById('tfGrid').innerHTML='<div class="loading">خطا: '+d.error+'</div>';return;}
+    // قیمت
+    const tfs=d.timeframes;const anyTf=tfs['1h']||Object.values(tfs)[0];
+    if(anyTf)document.getElementById('heroPrice').textContent='$'+fp(anyTf.price);
+    // بایاس
+    const b=d.bias;
+    document.getElementById('biasBar').innerHTML=
+      `<div class="bias-fill bias-bull" style="width:${b.bull_pct}%">${b.bull_pct>15?faNum(b.bull_pct)+'٪':''}</div>`+
+      `<div class="bias-fill bias-bear" style="width:${b.bear_pct}%">${b.bear_pct>15?faNum(b.bear_pct)+'٪':''}</div>`;
+    const bv=document.getElementById('biasVerdict');
+    bv.textContent=b.direction==='bull'?'📈 جهت غالب: صعودی':b.direction==='bear'?'📉 جهت غالب: نزولی':'⚖️ بدون جهت واضح';
+    bv.style.color=b.direction==='bull'?'var(--up)':b.direction==='bear'?'var(--down)':'var(--neutral)';
+    // تایم‌فریم‌ها
+    let html='';
+    TFS.forEach(tf=>{
+      const a=tfs[tf];if(!a){html+=`<div class="tf-card"><div class="tf-head"><span class="tf-name">${tf}</span></div><div style="color:var(--txt3);font-size:12px">داده نیست</div></div>`;return;}
+      const t=a.trend.trend;
+      let obHtml='';
+      const allOb=[...(a.order_blocks.bull||[]).map(o=>({...o,type:'bull'})),...(a.order_blocks.bear||[]).map(o=>({...o,type:'bear'}))].sort((x,y)=>Math.abs(x.dist)-Math.abs(y.dist)).slice(0,3);
+      allOb.forEach(o=>{obHtml+=`<div class="ob-item ob-${o.type}"><span style="color:${o.type==='bull'?'var(--up)':'var(--down)'}">${o.type==='bull'?'🟢':'🔴'}</span><span>$${fp(o.mid)}</span><span style="color:var(--txt2)">${o.dist>0?'+':''}${faNum(o.dist)}٪</span>${o.fvg?'<span class="chip">FVG</span>':''}</div>`;});
+      html+=`<div class="tf-card">
+        <div class="tf-head"><span class="tf-name">${tf}</span><span class="tf-trend ${trendCls(t)}">${a.trend.label}</span></div>
+        <div class="tf-row"><span class="k">الگو</span><span class="v">${a.pattern.label}</span></div>
+        <div class="tf-row"><span class="k">RSI</span><span class="v ${a.rsi<35?'up':a.rsi>65?'down':''}">${faNum(a.rsi)}${a.rsi_div?(a.rsi_div==='bull'?' 🟢واگرایی':' 🔴واگرایی'):''}</span></div>
+        <div class="tf-row"><span class="k">MACD</span><span class="v ${a.macd==='bull'?'up':'down'}">${a.macd==='bull'?'صعودی ↑':'نزولی ↓'}</span></div>
+        <div class="tf-row"><span class="k">StochRSI</span><span class="v ${a.stoch_rsi<20?'up':a.stoch_rsi>80?'down':''}">${faNum(a.stoch_rsi)}</span></div>
+        <div class="tf-row"><span class="k">ایچیموکو</span><span class="v">${a.ichimoku.cloud_pos==='above'?'بالای ابر':a.ichimoku.cloud_pos==='below'?'زیر ابر':'داخل ابر'}</span></div>
+        <div class="tf-row"><span class="k">بولینگر</span><span class="v">${a.bb_pos==='upper'?'باند بالا':a.bb_pos==='lower'?'باند پایین':'وسط'}</span></div>
+        <div class="tf-row"><span class="k">CVD</span><span class="v ${a.cvd_dir==='in'?'up':'down'}">${a.cvd_dir==='in'?'📥 ورود':'📤 خروج'}</span></div>
+        ${obHtml?`<div style="font-size:10px;color:var(--txt2);margin:8px 0 3px;font-family:var(--mono)">Order Blocks نزدیک:</div><div class="ob-list">${obHtml}</div>`:''}
+      </div>`;
+    });
+    document.getElementById('tfGrid').innerHTML=html;
+    // funding/oi
+    if(d.funding!=null||d.oi){
+      const fz=d.funding!=null?`Funding ${d.funding>0?'+':''}${faNum(d.funding.toFixed(4))}٪`:'';
+      const oz=d.oi?` · OI ${d.oi.chg_24h>0?'+':''}${faNum(d.oi.chg_24h)}٪ (۲۴س)`:'';
+    }
+  }catch(e){document.getElementById('tfGrid').innerHTML='<div class="loading">خطا در ارتباط با سرور</div>';}
+}
+
+async function loadML(){
+  const btn=document.getElementById('mlBtn');btn.disabled=true;btn.textContent='در حال آموزش مدل…';
+  document.getElementById('mlContent').innerHTML='<div class="loading"><span class="spin"></span> آموزش RandomForest روی داده تاریخی + backtesting…</div>';
+  try{
+    const r=await fetch(`/api/ml?symbol=${CURRENT}`);
+    const d=await r.json();
+    if(d.error){document.getElementById('mlContent').innerHTML='<div style="color:var(--down);font-size:12px">خطا: '+d.error+'</div>';btn.disabled=false;btn.textContent='اجرای تحلیل AI';return;}
+    const bull=d.combined_bull,bear=d.combined_bear;
+    const col=bull>=60?'var(--up)':bull<=40?'var(--down)':'var(--neutral)';
+    const circ=2*Math.PI*52;const off=circ*(1-bull/100);
+    let tfRows='';
+    for(const[tf,res]of Object.entries(d.timeframes)){
+      tfRows+=`<div class="ml-stat"><span style="color:var(--txt2)">${tf} (افق ${faNum(res.horizon)} کندل)</span><span style="color:${res.bull_prob>=50?'var(--up)':'var(--down)'}">صعود ${faNum(res.bull_prob)}٪ · دقت backtest ${res.backtest_acc?faNum(res.backtest_acc)+'٪':'—'}</span></div>`;
+    }
+    const firstRes=Object.values(d.timeframes)[0];
+    let featHtml='';
+    if(firstRes&&firstRes.top_features){firstRes.top_features.forEach(f=>{featHtml+=`<span class="chip">${f.name}</span>`;});}
+    document.getElementById('mlContent').innerHTML=`
+      <div class="ml-prob">
+        <div class="prob-circle">
+          <svg width="120" height="120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--bg3)" stroke-width="10"/><circle cx="60" cy="60" r="52" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/></svg>
+          <div class="pct"><span class="n" style="color:${col}">${faNum(bull)}٪</span><span class="l">احتمال صعود</span></div>
+        </div>
+        <div class="ml-detail">
+          <div class="ml-stat"><span style="color:var(--txt2)">جهت ترکیبی</span><span style="color:${col};font-weight:600">${bull>=60?'صعودی':bull<=40?'نزولی':'خنثی'}</span></div>
+          ${tfRows}
+          ${featHtml?`<div style="font-size:11px;color:var(--txt2);margin-top:6px">مهم‌ترین عوامل مدل:</div><div class="ml-feat">${featHtml}</div>`:''}
+        </div>
+      </div>
+      <div class="disclaimer">⚠️ <b>این یک تحلیل آماری است، نه پیشگویی.</b> مدل می‌گوید «در شرایط مشابه گذشته، چند درصد مواقع قیمت صعود کرده». دقت backtest نشان می‌دهد مدل چقدر قابل‌اعتماد است (بالای ۵۲٪ یعنی بهتر از شانس). هیچ تضمینی برای آینده نیست — همیشه مدیریت ریسک کن.</div>
+    `;
+  }catch(e){document.getElementById('mlContent').innerHTML='<div style="color:var(--down);font-size:12px">خطا در ارتباط</div>';}
+  btn.disabled=false;btn.textContent='اجرای مجدد AI';
+}
+
+async function loadOverview(){
+  try{
+    const r=await fetch('/api/overview');const d=await r.json();
+    if(!Array.isArray(d)){document.getElementById('ovGrid').innerHTML='<div class="loading">خطا</div>';return;}
+    let html='';
+    d.forEach(c=>{
+      html+=`<div class="ov-card" onclick="selectCoin('${c.symbol}')">
+        <div class="ov-coin">${c.coin}</div>
+        <div class="ov-price">$${fp(c.price)}</div>
+        <span class="ov-trend ${trendCls(c.trend)}">${c.trend_label}</span>
+        <div style="font-size:10px;color:var(--txt2);margin-top:4px;font-family:var(--mono)">RSI ${faNum(c.rsi)} · ${c.cvd_dir==='in'?'📥':'📤'}</div>
+      </div>`;
+    });
+    document.getElementById('ovGrid').innerHTML=html;
+  }catch(e){document.getElementById('ovGrid').innerHTML='<div class="loading">خطا در ارتباط</div>';}
+}
+
+function selectCoin(sym){
+  CURRENT=sym;
+  document.querySelectorAll('.coin-pill').forEach(x=>{x.classList.toggle('on',x.dataset.symbol===sym);});
+  window.scrollTo({top:0,behavior:'smooth'});
+  loadAnalysis();
+  loadChart();
+  resetSetup();
+  document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';
+}
+function resetSetup(){
+  const badge=document.getElementById('setupBadge');
+  if(badge){badge.className='setup-badge setup-none';badge.textContent='برای بررسی ستاپ دکمه را بزن';}
+  const detail=document.getElementById('setupDetail');
+  if(detail){detail.className='setup-detail';detail.innerHTML='';}
+}
+
+// ── چارت ۱ ساعته + ستاپ ──
+let chart=null,candleSeries=null,ema50Series=null,ema200Series=null;
+
+function initChart(){
+  const el=document.getElementById('chartContainer');
+  if(chart){chart.remove();chart=null;}
+  chart=LightweightCharts.createChart(el,{
+    width:el.clientWidth,height:340,
+    layout:{background:{color:'transparent'},textColor:'#6b8199',fontFamily:'IBM Plex Mono'},
+    grid:{vertLines:{color:'rgba(30,42,58,.4)'},horzLines:{color:'rgba(30,42,58,.4)'}},
+    rightPriceScale:{borderColor:'#1e2a3a'},
+    timeScale:{borderColor:'#1e2a3a',timeVisible:true},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
+  });
+  candleSeries=chart.addCandlestickSeries({
+    upColor:'#26d97f',downColor:'#ff4d6a',borderVisible:false,
+    wickUpColor:'#26d97f',wickDownColor:'#ff4d6a',
+  });
+  ema50Series=chart.addLineSeries({color:'#5b8cff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  ema200Series=chart.addLineSeries({color:'#ff9332',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+}
+
+async function loadChart(){
+  try{
+    const r=await fetch(`/api/chart?symbol=${CURRENT}`);
+    const d=await r.json();
+    if(d.error||!d.candles){return;}
+    if(!chart)initChart();
+    candleSeries.setData(d.candles);
+    if(d.ema50&&d.ema50.length)ema50Series.setData(d.ema50);
+    if(d.ema200&&d.ema200.length)ema200Series.setData(d.ema200);
+    // اوردر بلاک‌ها به‌صورت خط افقی
+    candleSeries.setMarkers([]);
+    const obLines=[];
+    (d.order_blocks.bull||[]).slice(0,2).forEach(o=>{
+      candleSeries.createPriceLine({price:o.mid,color:'rgba(38,217,127,.5)',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'OB صعودی'});
+    });
+    (d.order_blocks.bear||[]).slice(0,2).forEach(o=>{
+      candleSeries.createPriceLine({price:o.mid,color:'rgba(255,77,106,.5)',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'OB نزولی'});
+    });
+    chart.timeScale().fitContent();
+  }catch(e){}
+}
+
+async function loadSetup(){
+  const btn=document.getElementById('setupBtn');btn.disabled=true;btn.textContent='در حال بررسی…';
+  const badge=document.getElementById('setupBadge');
+  badge.className='setup-badge setup-wait';badge.textContent='⟳ بررسی ML + Confluence…';
+  try{
+    const r=await fetch(`/api/setup?symbol=${CURRENT}`);
+    const d=await r.json();
+    if(d.error){badge.className='setup-badge setup-none';badge.textContent='خطا: '+d.error;btn.disabled=false;btn.textContent='بررسی مجدد';return;}
+    const detail=document.getElementById('setupDetail');
+    if(d.has_setup){
+      const isBull=d.direction==='bull';
+      badge.className='setup-badge '+(isBull?'setup-bull':'setup-bear');
+      badge.textContent=`${isBull?'🟢 ستاپ صعودی':'🔴 ستاپ نزولی'} تأیید شد! (ML ${faNum(d.ml_prob)}٪)`;
+      // علامت روی چارت در نقطه فعلی
+      if(candleSeries){
+        const r2=await fetch(`/api/chart?symbol=${CURRENT}`);const cd=await r2.json();
+        if(cd.candles&&cd.candles.length){
+          const last=cd.candles[cd.candles.length-1];
+          candleSeries.setMarkers([{
+            time:last.time,position:isBull?'belowBar':'aboveBar',
+            color:isBull?'#26d97f':'#ff4d6a',shape:isBull?'arrowUp':'arrowDown',
+            text:`ستاپ ${faNum(d.ml_prob)}٪`
+          }]);
+        }
+      }
+      let factorHtml=d.factors.map(f=>`<span class="factor-chip ${isBull?'':'bear'}">${f}</span>`).join('');
+      let entryHtml='';
+      if(d.entry_zone){entryHtml=`<div class="setup-metric">ناحیه ورود (OB): $${fp(d.entry_zone.mid)} (${d.entry_zone.dist>0?'+':''}${faNum(d.entry_zone.dist)}٪)${d.entry_zone.fvg?' · FVG✓':''}</div>`;}
+      detail.className='setup-detail show';
+      detail.innerHTML=`
+        <div class="setup-row">
+          <span class="setup-metric">ML: <b style="color:${isBull?'var(--up)':'var(--down)'}">${faNum(d.ml_prob)}٪</b></span>
+          <span class="setup-metric">Confluence: <b>${faNum(d.conf_score)}</b>/${faNum(d.conf_min)} لازم</span>
+          ${d.backtest_acc?`<span class="setup-metric">دقت backtest: ${faNum(d.backtest_acc)}٪</span>`:''}
+          ${entryHtml}
+        </div>
+        <div class="setup-row">${factorHtml}</div>
+        <div class="disclaimer">⚠️ ستاپ یعنی ML بالای ۷۰٪ + حداقل ۵ فاکتور هم‌جهت. این آماری است نه قطعی — همیشه مدیریت ریسک و تأیید چشمی کن.</div>
+      `;
+    } else {
+      badge.className='setup-badge setup-none';
+      const reason=d.reason||`Confluence کافی نیست (${faNum(d.conf_score||0)}/${faNum(d.conf_min||5)})`;
+      badge.textContent=`⏸ ستاپ معتبری نیست — ${reason}`;
+      if(candleSeries)candleSeries.setMarkers([]);
+      detail.className='setup-detail show';
+      detail.innerHTML=`<div class="setup-row"><span class="setup-metric">ML خام: ${d.ml_bull_raw!=null?faNum(d.ml_bull_raw)+'٪ صعود':'—'}</span>${d.conf_score!=null?`<span class="setup-metric">Confluence: ${faNum(d.conf_score)}/${faNum(d.conf_min)}</span>`:''}</div><div style="font-size:11px;color:var(--txt3);font-family:var(--mono)">برای ستاپ معتبر، هم ML باید بالای ۷۰٪ باشد هم حداقل ۵ فاکتور هم‌جهت.</div>`;
+    }
+  }catch(e){badge.className='setup-badge setup-none';badge.textContent='خطا در ارتباط';}
+  btn.disabled=false;btn.textContent='بررسی مجدد ستاپ';
+}
+
+// resize چارت
+window.addEventListener('resize',()=>{if(chart){const el=document.getElementById('chartContainer');chart.applyOptions({width:el.clientWidth});}});
+
+// شروع
+loadAnalysis();
+loadOverview();
+loadChart();
+loadSetup();          // ستاپ ارز فعلی خودکار همان اول
+loadSetupBadges();    // نشانگر ستاپ روی همه ارزها
+setInterval(loadAnalysis,120000);
+setInterval(loadOverview,120000);
+setInterval(loadChart,120000);
+setInterval(loadSetup,180000);       // ارز فعلی هر ۳ دقیقه
+setInterval(loadSetupBadges,300000); // نشانگر همه ارزها هر ۵ دقیقه
+
+// نشانگر ستاپ روی pill های ارز
+async function loadSetupBadges(){
+  try{
+    const r=await fetch('/api/setups');const d=await r.json();
+    if(!d.setups)return;
+    const setupMap={};
+    d.setups.forEach(s=>{setupMap[s.coin]=s;});
+    document.querySelectorAll('.coin-pill').forEach(pill=>{
+      const coin=(pill.dataset.symbol||'').replace('USDT','');
+      const s=setupMap[coin];
+      pill.querySelectorAll('.pill-dot').forEach(x=>x.remove());
+      if(s){
+        const dot=document.createElement('span');
+        dot.className='pill-dot';
+        dot.textContent=s.direction==='bull'?' 🟢':' 🔴';
+        dot.title=`ستاپ ${s.direction==='bull'?'صعودی':'نزولی'} (ML ${s.ml_prob}٪)`;
+        pill.appendChild(dot);
+      }
+    });
+  }catch(e){}
+}
+setInterval(loadAnalysis,120000);  // هر ۲ دقیقه
+setInterval(loadOverview,120000);
+
+// ── مدیریت کاربران ──
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+function openPwModal(){document.getElementById('pwModal').classList.add('show');document.getElementById('pwMsg').textContent='';}
+async function openUsers(){
+  document.getElementById('usersModal').classList.add('show');
+  document.getElementById('userMsg').textContent='';
+  await refreshUsers();
+}
+async function refreshUsers(){
+  try{
+    const r=await fetch('/api/users');const d=await r.json();
+    if(!Array.isArray(d))return;
+    document.getElementById('usersList').innerHTML=d.map(u=>
+      `<div class="user-item"><span>${u.username}</span><span class="user-role ${u.role}">${u.role==='admin'?'ادمین':'کاربر'}</span>${u.role!=='admin'?`<button class="user-del" onclick="delUser('${u.username}')">حذف</button>`:''}</div>`
+    ).join('');
+  }catch(e){}
+}
+async function addUser(){
+  const un=document.getElementById('newUser').value.trim();
+  const pw=document.getElementById('newPass').value;
+  const msg=document.getElementById('userMsg');
+  try{
+    const r=await fetch('/api/users/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:un,password:pw})});
+    const d=await r.json();
+    if(d.ok){msg.style.color='var(--up)';msg.textContent='✅ کاربر اضافه شد';document.getElementById('newUser').value='';document.getElementById('newPass').value='';refreshUsers();}
+    else{msg.style.color='var(--down)';msg.textContent='❌ '+(d.error||'خطا');}
+  }catch(e){msg.style.color='var(--down)';msg.textContent='❌ خطا در ارتباط';}
+}
+async function delUser(un){
+  if(!confirm(`کاربر ${un} حذف شود؟`))return;
+  try{
+    const r=await fetch('/api/users/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:un})});
+    const d=await r.json();
+    if(d.ok)refreshUsers();
+  }catch(e){}
+}
+async function changeMyPw(){
+  const pw=document.getElementById('myNewPass').value;
+  const msg=document.getElementById('pwMsg');
+  try{
+    const r=await fetch('/api/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_password:pw})});
+    const d=await r.json();
+    if(d.ok){msg.style.color='var(--up)';msg.textContent='✅ رمز عوض شد';document.getElementById('myNewPass').value='';}
+    else{msg.style.color='var(--down)';msg.textContent='❌ '+(d.error||'خطا');}
+  }catch(e){msg.style.color='var(--down)';msg.textContent='❌ خطا';}
+}
+// بستن مودال با کلیک بیرون
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');}));
+</script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ورود — تحلیلگر بیت‌کوین</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0e14;--panel:#0d131c;--border:#1e2a3a;--border2:#293849;--txt:#d4dde8;--txt2:#6b8199;--accent:#ff9332;--down:#ff4d6a;--mono:'IBM Plex Mono',monospace;--sans:'Vazirmatn',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 50% 30%,rgba(255,147,50,.08),transparent);pointer-events:none}
+.box{position:relative;z-index:1;width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:36px 30px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.logo{text-align:center;margin-bottom:8px}
+.mark{display:inline-flex;width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--accent),#ff6b1a);align-items:center;justify-content:center;font-size:28px;box-shadow:0 8px 24px rgba(255,147,50,.35)}
+h1{text-align:center;font-size:19px;font-weight:700;margin-bottom:4px}
+.sub{text-align:center;font-size:12px;color:var(--txt2);font-family:var(--mono);margin-bottom:26px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:6px;font-family:var(--mono)}
+.field input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:9px;padding:11px 14px;color:var(--txt);font-family:var(--mono);font-size:14px;transition:border-color .15s}
+.field input:focus{outline:none;border-color:var(--accent)}
+.btn{width:100%;background:linear-gradient(135deg,var(--accent),#ff6b1a);color:#1a0c00;border:none;border-radius:9px;padding:12px;font-family:var(--sans);font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;transition:transform .1s}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.err{background:rgba(255,77,106,.12);border:1px solid rgba(255,77,106,.3);color:var(--down);font-size:12px;padding:9px 12px;border-radius:8px;margin-bottom:16px;text-align:center}
+.foot{text-align:center;font-size:10px;color:#3d4f63;margin-top:20px;font-family:var(--mono);line-height:1.7}
+</style>
+</head>
+<body>
+<form class="box" method="POST" action="/login">
+  <div class="logo"><div class="mark">₿</div></div>
+  <h1>تحلیلگر بیت‌کوین</h1>
+  <div class="sub">برای ورود احراز هویت کن</div>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <div class="field">
+    <label>نام کاربری</label>
+    <input type="text" name="username" autocomplete="username" required autofocus>
+  </div>
+  <div class="field">
+    <label>رمز عبور</label>
+    <input type="password" name="password" autocomplete="current-password" required>
+  </div>
+  <button class="btn" type="submit">ورود</button>
+  <div class="foot">دسترسی فقط برای کاربران مجاز<br>multi-timeframe + AI analysis</div>
+</form>
+</body>
+</html>
