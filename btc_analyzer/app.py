@@ -16,6 +16,7 @@ import secrets
 from analysis import analyze_timeframe, get_funding, get_oi
 from ml_model import ml_scenario, HAS_SKLEARN
 from setup import detect_setup, get_chart_data
+from notify import notify_setup
 from auth import (init_auth, verify_user, create_user, change_password,
                  delete_user, list_users, login_required, admin_required)
 
@@ -122,14 +123,17 @@ def api_analyze():
         return jsonify({"error": "ارز نامعتبر"}), 400
 
     def do():
+        from concurrent.futures import ThreadPoolExecutor
         result = {"symbol": symbol, "timeframes": {}}
-        for tf in TIMEFRAMES:
-            a = analyze_timeframe(symbol, tf)
-            if a:
-                result["timeframes"][tf] = a
+        # تایم‌فریم‌ها را موازی بگیر (سریع‌تر)
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futs = {tf: ex.submit(analyze_timeframe, symbol, tf) for tf in TIMEFRAMES}
+            for tf, fut in futs.items():
+                a = fut.result()
+                if a:
+                    result["timeframes"][tf] = a
         result["funding"] = get_funding(symbol)
         result["oi"] = get_oi(symbol)
-        # رأی‌گیری روند چند تایم‌فریم
         result["bias"] = compute_bias(result["timeframes"])
         return result
 
@@ -229,6 +233,11 @@ def background_setup_scan():
                         _setup_scan["results"][sym] = res
                         # کش فردی هم به‌روز شود
                         _cache[f"setup_{sym}"] = {"ts": time.time(), "data": res}
+                        # اگر ستاپ معتبر بود، به اعضای ربات تلگرام خبر بده
+                        try:
+                            notify_setup(sym, res)
+                        except Exception as e:
+                            print(f"[!] notify: {e}")
                     time.sleep(2)  # فاصله بین ارزها (فشار کمتر)
                 except Exception:
                     pass
