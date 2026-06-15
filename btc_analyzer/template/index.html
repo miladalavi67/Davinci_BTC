@@ -35,6 +35,20 @@ body::before{content:'';position:fixed;inset:0;background:
 .coin-pill.on{background:var(--accent);color:#1a0c00;border-color:var(--accent);font-weight:600}
 .pill-dot{font-size:9px}
 
+/* تحلیل پیشرفته */
+.adv-grid{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px}
+@media(max-width:1000px){.adv-grid{grid-template-columns:1fr}}
+.adv-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+.adv-card h3{font-size:13px;font-family:var(--mono);color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:7px;padding-bottom:9px;border-bottom:1px solid var(--border)}
+.adv-verdict{font-size:15px;font-weight:700;margin-bottom:10px;text-align:center;padding:8px;border-radius:8px}
+.adv-sig{font-size:11px;color:var(--txt2);font-family:var(--mono);padding:3px 0;display:flex;align-items:center;gap:6px}
+.adv-sig::before{content:'▸';color:var(--accent)}
+.zone-item{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;padding:7px 9px;border-radius:7px;background:var(--bg3);margin-bottom:5px}
+.zone-imp{display:inline-flex;min-width:20px;height:20px;align-items:center;justify-content:center;border-radius:5px;font-size:10px;font-weight:700}
+.zone-sup{border-right:2px solid var(--up)}
+.zone-res{border-right:2px solid var(--down)}
+.fib-tag{font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,147,50,.12);color:var(--accent)}
+
 /* نوار کاربری */
 .user-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .user-name{font-family:var(--mono);font-size:12px;color:var(--txt2);padding:5px 10px;background:var(--bg2);border-radius:7px}
@@ -226,6 +240,10 @@ body::before{content:'';position:fixed;inset:0;background:
     <div id="setupDetail" class="setup-detail"></div>
   </div>
 
+  <!-- تحلیل پیشرفته: ایچیموکو + RSI + فیبوناچی -->
+  <div class="section-label">تحلیل پیشرفته (ایچیموکو + RSI + فیبوناچی)</div>
+  <div class="adv-grid" id="advGrid"><div class="loading"><span class="spin"></span> در حال تحلیل…</div></div>
+
   <!-- ML -->
   <div class="section-label">سناریو هوش مصنوعی (RandomForest + Backtesting)</div>
   <div class="panel ml-panel" id="mlPanel">
@@ -258,7 +276,7 @@ COINS.forEach(c=>{
   b.className='coin-pill'+(c===CURRENT?' on':'');
   b.textContent=c.replace('USDT','');
   b.dataset.symbol=c;
-  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadAnalysis();loadChart();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
+  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadAnalysis();loadChart();loadAdvanced();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
   coinsEl.appendChild(b);
 });
 
@@ -320,28 +338,39 @@ async function loadML(){
     const d=await r.json();
     if(d.error){document.getElementById('mlContent').innerHTML='<div style="color:var(--down);font-size:12px">خطا: '+d.error+'</div>';btn.disabled=false;btn.textContent='اجرای تحلیل AI';return;}
     const bull=d.combined_bull,bear=d.combined_bear;
-    const col=bull>=60?'var(--up)':bull<=40?'var(--down)':'var(--neutral)';
+    const anyReliable=d.any_reliable;
+    const col=!anyReliable?'var(--txt2)':bull>=60?'var(--up)':bull<=40?'var(--down)':'var(--neutral)';
     const circ=2*Math.PI*52;const off=circ*(1-bull/100);
     let tfRows='';
     for(const[tf,res]of Object.entries(d.timeframes)){
-      tfRows+=`<div class="ml-stat"><span style="color:var(--txt2)">${tf} (افق ${faNum(res.horizon)} کندل)</span><span style="color:${res.bull_prob>=50?'var(--up)':'var(--down)'}">صعود ${faNum(res.bull_prob)}٪ · دقت backtest ${res.backtest_acc?faNum(res.backtest_acc)+'٪':'—'}</span></div>`;
+      const relIcon=res.reliable?'✅':'⚠️';
+      const edgeTxt=res.edge!=null?` · برتری ${res.edge>0?'+':''}${faNum(res.edge)}٪`:'';
+      tfRows+=`<div class="ml-stat"><span style="color:var(--txt2)">${tf} ${relIcon}</span><span style="color:${res.reliable?(res.bull_prob>=50?'var(--up)':'var(--down)'):'var(--txt2)'}">صعود ${faNum(res.bull_prob)}٪ · دقت ${res.backtest_acc?faNum(res.backtest_acc)+'٪':'—'}${edgeTxt}</span></div>`;
     }
     const firstRes=Object.values(d.timeframes)[0];
     let featHtml='';
     if(firstRes&&firstRes.top_features){firstRes.top_features.forEach(f=>{featHtml+=`<span class="chip">${f.name}</span>`;});}
+    // پیام وضعیت اعتبار
+    let reliabilityBanner='';
+    if(!anyReliable){
+      reliabilityBanner=`<div style="background:rgba(245,183,64,.12);border:1px solid rgba(245,183,64,.3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--neutral)">⚠️ <b>مدل در شرایط فعلی قابل‌اعتماد نیست</b> — برتری معناداری نسبت به حدس ساده ندارد. یعنی بازار الگوی واضحی ندارد. به این عدد تکیه نکن.</div>`;
+    }else{
+      reliabilityBanner=`<div style="background:rgba(38,217,127,.1);border:1px solid rgba(38,217,127,.25);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--up)">✅ مدل برتری معناداری نسبت به حدس ساده دارد (قابل اتکا با احتیاط)</div>`;
+    }
     document.getElementById('mlContent').innerHTML=`
+      ${reliabilityBanner}
       <div class="ml-prob">
         <div class="prob-circle">
           <svg width="120" height="120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--bg3)" stroke-width="10"/><circle cx="60" cy="60" r="52" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/></svg>
           <div class="pct"><span class="n" style="color:${col}">${faNum(bull)}٪</span><span class="l">احتمال صعود</span></div>
         </div>
         <div class="ml-detail">
-          <div class="ml-stat"><span style="color:var(--txt2)">جهت ترکیبی</span><span style="color:${col};font-weight:600">${bull>=60?'صعودی':bull<=40?'نزولی':'خنثی'}</span></div>
+          <div class="ml-stat"><span style="color:var(--txt2)">جهت ترکیبی</span><span style="color:${col};font-weight:600">${!anyReliable?'نامشخص':bull>=60?'صعودی':bull<=40?'نزولی':'خنثی'}</span></div>
           ${tfRows}
           ${featHtml?`<div style="font-size:11px;color:var(--txt2);margin-top:6px">مهم‌ترین عوامل مدل:</div><div class="ml-feat">${featHtml}</div>`:''}
         </div>
       </div>
-      <div class="disclaimer">⚠️ <b>این یک تحلیل آماری است، نه پیشگویی.</b> مدل می‌گوید «در شرایط مشابه گذشته، چند درصد مواقع قیمت صعود کرده». دقت backtest نشان می‌دهد مدل چقدر قابل‌اعتماد است (بالای ۵۲٪ یعنی بهتر از شانس). هیچ تضمینی برای آینده نیست — همیشه مدیریت ریسک کن.</div>
+      <div class="disclaimer">⚠️ <b>تحلیل آماری، نه پیشگویی.</b> «دقت» = درصد درست backtest. «برتری» = چقدر بهتر از حدس ساده (کلاس غالب). فقط وقتی برتری مثبت و معنادار باشد (✅) مدل ارزش توجه دارد. هیچ تضمینی نیست — مدیریت ریسک کن.</div>
     `;
   }catch(e){document.getElementById('mlContent').innerHTML='<div style="color:var(--down);font-size:12px">خطا در ارتباط</div>';}
   btn.disabled=false;btn.textContent='اجرای مجدد AI';
@@ -370,6 +399,7 @@ function selectCoin(sym){
   window.scrollTo({top:0,behavior:'smooth'});
   loadAnalysis();
   loadChart();
+  loadAdvanced();
   resetSetup();
   document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';
 }
@@ -478,17 +508,68 @@ async function loadSetup(){
 // resize چارت
 window.addEventListener('resize',()=>{if(chart){const el=document.getElementById('chartContainer');chart.applyOptions({width:el.clientWidth});}});
 
-// شروع
+// شروع — اول داشبورد اصلی و چارت (سریع و مهم)، بعد چیزهای سنگین با تأخیر
 loadAnalysis();
-loadOverview();
 loadChart();
-loadSetup();          // ستاپ ارز فعلی خودکار همان اول
-loadSetupBadges();    // نشانگر ستاپ روی همه ارزها
+// overview و ستاپ سنگین‌اند (ML) — با تأخیر تا داشبورد اول کامل بیاد
+setTimeout(loadAdvanced, 2000);
+setTimeout(loadOverview, 3000);
+setTimeout(loadSetup, 6000);          // ستاپ ارز فعلی
+setTimeout(loadSetupBadges, 12000);   // نشانگر همه ارزها (سنگین‌ترین)
 setInterval(loadAnalysis,120000);
-setInterval(loadOverview,120000);
 setInterval(loadChart,120000);
-setInterval(loadSetup,180000);       // ارز فعلی هر ۳ دقیقه
-setInterval(loadSetupBadges,300000); // نشانگر همه ارزها هر ۵ دقیقه
+setInterval(loadAdvanced,180000);
+setInterval(loadOverview,180000);
+setInterval(loadSetup,180000);
+setInterval(loadSetupBadges,300000);
+
+// ── تحلیل پیشرفته (ایچیموکو + RSI + فیبوناچی) ──
+async function loadAdvanced(){
+  try{
+    const r=await fetch(`/api/advanced?symbol=${CURRENT}`);
+    const d=await r.json();
+    if(d.error){document.getElementById('advGrid').innerHTML='<div class="loading">خطا: '+d.error+'</div>';return;}
+    const ich=d.ichimoku,rsi=d.rsi,zones=d.zones;
+    const ichCol=ich.bias==='bull'?'var(--up)':ich.bias==='bear'?'var(--down)':'var(--neutral)';
+    const ichBg=ich.bias==='bull'?'rgba(38,217,127,.12)':ich.bias==='bear'?'rgba(255,77,106,.12)':'rgba(245,183,64,.12)';
+    let ichSigs=ich.signals.map(s=>`<div class="adv-sig">${s}</div>`).join('');
+    const rsiCol=rsi.zone==='overbought'?'var(--down)':rsi.zone==='oversold'?'var(--up)':'var(--txt)';
+    let zoneHtml='';
+    if(zones.zones&&zones.zones.length){
+      zones.zones.forEach(z=>{
+        const isSup=z.direction==='support';
+        const impCol=z.importance>=4?'var(--gold)':z.importance>=3?'var(--accent)':'var(--txt2)';
+        zoneHtml+=`<div class="zone-item ${isSup?'zone-sup':'zone-res'}">
+          <span class="zone-imp" style="background:${impCol};color:#1a0c00">${faNum(z.importance)}</span>
+          <span>$${fp(z.level)}</span>
+          <span style="color:var(--txt2)">${z.dist>0?'+':''}${faNum(z.dist)}٪</span>
+          <span style="color:${isSup?'var(--up)':'var(--down)'};font-size:10px">${isSup?'حمایت':'مقاومت'}</span>
+          ${z.has_ob?'<span class="fib-tag">OB</span>':''}
+          <span class="fib-tag">${z.fib}</span>
+        </div>`;
+      });
+    }else{zoneHtml='<div style="color:var(--txt3);font-size:11px">محدوده مهمی یافت نشد</div>';}
+    document.getElementById('advGrid').innerHTML=`
+      <div class="adv-card">
+        <h3>☁️ ایچیموکو</h3>
+        <div class="adv-verdict" style="color:${ichCol};background:${ichBg}">${ich.verdict}</div>
+        ${ichSigs}
+        <div style="font-size:10px;color:var(--txt3);margin-top:8px;font-family:var(--mono)">تنکان $${fp(ich.tenkan)} · کیجون $${fp(ich.kijun)}</div>
+      </div>
+      <div class="adv-card">
+        <h3>📊 RSI</h3>
+        <div class="adv-verdict" style="color:${rsiCol};background:var(--bg3)">${faNum(rsi.value)} — ${rsi.zone_fa}</div>
+        ${rsi.divergence_fa?`<div class="adv-sig" style="color:${rsi.divergence==='bull'?'var(--up)':'var(--down)'}">${rsi.divergence_fa}</div>`:'<div class="adv-sig">واگرایی فعالی نیست</div>'}
+        <div style="font-size:10px;color:var(--txt3);margin-top:10px;line-height:1.7">اشباع خرید بالای ۷۰ · اشباع فروش زیر ۳۰<br>واگرایی = احتمال برگشت روند</div>
+      </div>
+      <div class="adv-card">
+        <h3>🎯 محدوده‌های مهم (فیبوناچی + OB)</h3>
+        ${zoneHtml}
+        <div style="font-size:10px;color:var(--txt3);margin-top:8px;line-height:1.6">عدد = اهمیت (۲ تا ۵). محدوده‌ای که هم فیبو طلایی باشد هم Order Block، مهم‌تر است.</div>
+      </div>
+    `;
+  }catch(e){document.getElementById('advGrid').innerHTML='<div class="loading">خطا در ارتباط</div>';}
+}
 
 // نشانگر ستاپ روی pill های ارز
 async function loadSetupBadges(){
@@ -511,8 +592,6 @@ async function loadSetupBadges(){
     });
   }catch(e){}
 }
-setInterval(loadAnalysis,120000);  // هر ۲ دقیقه
-setInterval(loadOverview,120000);
 
 // ── مدیریت کاربران ──
 function closeModal(id){document.getElementById(id).classList.remove('show');}
