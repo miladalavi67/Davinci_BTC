@@ -17,6 +17,7 @@ from analysis import analyze_timeframe, get_funding, get_oi
 from ml_model import ml_scenario, HAS_SKLEARN
 from setup import detect_setup, get_chart_data
 from advanced import advanced_analysis
+from multitf import multi_tf_analysis
 from notify import notify_setup
 from auth import (init_auth, verify_user, create_user, change_password,
                  delete_user, list_users, login_required, admin_required)
@@ -215,6 +216,20 @@ def api_advanced():
         return advanced_analysis(symbol, "1h") or {"error": "تحلیل ناموفق"}
 
     return jsonify(cached(f"advanced_{symbol}", do))
+
+
+@app.route("/api/multitf")
+@login_required
+def api_multitf():
+    """تحلیل چندمرحله‌ای BTC + سناریوهای سشن US"""
+    symbol = request.args.get("symbol", "BTCUSDT").upper()
+    if symbol not in COINS:
+        return jsonify({"error": "ارز نامعتبر"}), 400
+
+    def do():
+        return multi_tf_analysis(symbol) or {"error": "تحلیل ناموفق"}
+
+    return jsonify(cached(f"multitf_{symbol}", do))
 
 
 @app.route("/api/setup")
