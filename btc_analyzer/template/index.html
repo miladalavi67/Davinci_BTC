@@ -49,6 +49,26 @@ body::before{content:'';position:fixed;inset:0;background:
 .zone-res{border-right:2px solid var(--down)}
 .fib-tag{font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,147,50,.12);color:var(--accent)}
 
+/* تحلیل مولتی‌تایم‌فریم */
+.mtf-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:900px){.mtf-steps{grid-template-columns:1fr}}
+.mtf-step{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;position:relative}
+.mtf-step .tf-badge{position:absolute;top:12px;left:14px;font-size:10px;font-family:var(--mono);background:var(--bg3);padding:2px 8px;border-radius:5px;color:var(--accent)}
+.mtf-step h4{font-size:12px;color:var(--txt2);margin-bottom:8px;font-family:var(--mono)}
+.mtf-verdict{font-size:16px;font-weight:700;margin:8px 0;padding:6px 10px;border-radius:8px;text-align:center}
+.mtf-detail{font-size:11px;color:var(--txt2);font-family:var(--mono);padding:2px 0}
+.scen-wrap{display:flex;flex-direction:column;gap:10px}
+.scen-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-right:3px solid var(--border)}
+.scen-bull{border-right-color:var(--up)}
+.scen-bear{border-right-color:var(--down)}
+.scen-range{border-right-color:var(--neutral)}
+.scen-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.scen-title{font-size:14px;font-weight:700}
+.scen-prob{font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:5px;background:var(--bg3)}
+.scen-row{font-size:12px;font-family:var(--mono);color:var(--txt2);padding:2px 0;display:flex;gap:8px}
+.scen-row b{color:var(--txt)}
+.mtf-overall{font-size:14px;font-weight:700;text-align:center;padding:10px;border-radius:10px;background:var(--bg3);margin-bottom:14px}
+
 /* نوار کاربری */
 .user-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .user-name{font-family:var(--mono);font-size:12px;color:var(--txt2);padding:5px 10px;background:var(--bg2);border-radius:7px}
@@ -244,6 +264,10 @@ body::before{content:'';position:fixed;inset:0;background:
   <div class="section-label">تحلیل پیشرفته (ایچیموکو + RSI + فیبوناچی)</div>
   <div class="adv-grid" id="advGrid"><div class="loading"><span class="spin"></span> در حال تحلیل…</div></div>
 
+  <!-- تحلیل چندمرحله‌ای + سناریو US (شبیه v17) -->
+  <div class="section-label">🔬 تحلیل مولتی‌تایم‌فریم + سناریو سشن آمریکا</div>
+  <div id="multitf"><div class="loading"><span class="spin"></span> در حال تحلیل مرحله‌ای…</div></div>
+
   <!-- ML -->
   <div class="section-label">سناریو هوش مصنوعی (RandomForest + Backtesting)</div>
   <div class="panel ml-panel" id="mlPanel">
@@ -276,7 +300,7 @@ COINS.forEach(c=>{
   b.className='coin-pill'+(c===CURRENT?' on':'');
   b.textContent=c.replace('USDT','');
   b.dataset.symbol=c;
-  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadAnalysis();loadChart();loadAdvanced();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
+  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadAnalysis();loadChart();loadAdvanced();loadMultitf();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
   coinsEl.appendChild(b);
 });
 
@@ -400,6 +424,7 @@ function selectCoin(sym){
   loadAnalysis();
   loadChart();
   loadAdvanced();
+  loadMultitf();
   resetSetup();
   document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';
 }
@@ -513,12 +538,14 @@ loadAnalysis();
 loadChart();
 // overview و ستاپ سنگین‌اند (ML) — با تأخیر تا داشبورد اول کامل بیاد
 setTimeout(loadAdvanced, 2000);
+ setTimeout(loadMultitf, 4000);
 setTimeout(loadOverview, 3000);
 setTimeout(loadSetup, 6000);          // ستاپ ارز فعلی
 setTimeout(loadSetupBadges, 12000);   // نشانگر همه ارزها (سنگین‌ترین)
 setInterval(loadAnalysis,120000);
 setInterval(loadChart,120000);
 setInterval(loadAdvanced,180000);
+setInterval(loadMultitf,180000);
 setInterval(loadOverview,180000);
 setInterval(loadSetup,180000);
 setInterval(loadSetupBadges,300000);
@@ -569,6 +596,62 @@ async function loadAdvanced(){
       </div>
     `;
   }catch(e){document.getElementById('advGrid').innerHTML='<div class="loading">خطا در ارتباط</div>';}
+}
+
+// ── تحلیل مولتی‌تایم‌فریم + سناریو US ──
+async function loadMultitf(){
+  try{
+    const r=await fetch(`/api/multitf?symbol=${CURRENT}`);
+    const d=await r.json();
+    if(d.error){document.getElementById('multitf').innerHTML='<div class="loading">خطا: '+d.error+'</div>';return;}
+    const s1=d.step1,s2=d.step2,s3=d.step3,scen=d.scenarios;
+    const bcol=b=>b==='bull'?'var(--up)':b==='bear'?'var(--down)':'var(--neutral)';
+    const bbg=b=>b==='bull'?'rgba(38,217,127,.12)':b==='bear'?'rgba(255,77,106,.12)':'rgba(245,183,64,.12)';
+    // مرحله ۱: ایچیموکو
+    let sig1=s1.signals.slice(0,3).map(s=>`<div class="mtf-detail">▸ ${s}</div>`).join('');
+    // سناریوها
+    let scenHtml='';
+    scen.scenarios.forEach(sc=>{
+      const cls=sc.type==='bull'?'scen-bull':sc.type==='bear'?'scen-bear':'scen-range';
+      let rows='';
+      if(sc.entry!=null)rows+=`<div class="scen-row"><b>ورود:</b> $${fp(sc.entry)}</div>`;
+      if(sc.target!=null)rows+=`<div class="scen-row"><b>هدف:</b> $${fp(sc.target)}</div>`;
+      if(sc.stop!=null)rows+=`<div class="scen-row"><b>حد ضرر:</b> $${fp(sc.stop)}</div>`;
+      scenHtml+=`<div class="scen-card ${cls}">
+        <div class="scen-head"><span class="scen-title" style="color:${bcol(sc.type==='range'?'neutral':sc.type)}">${sc.title}</span><span class="scen-prob">احتمال: ${sc.prob}</span></div>
+        <div class="scen-row">🎯 <b>محرک:</b> ${sc.trigger}</div>
+        ${rows}
+        <div class="scen-row" style="color:var(--txt3);font-size:11px">${sc.logic}</div>
+      </div>`;
+    });
+    document.getElementById('multitf').innerHTML=`
+      <div class="mtf-overall">جهت کلی سشن US: <span style="color:${scen.overall.includes('صعودی')?'var(--up)':scen.overall.includes('نزولی')?'var(--down)':'var(--neutral)'}">${scen.overall}</span></div>
+      <div class="mtf-steps">
+        <div class="mtf-step">
+          <span class="tf-badge">${s1.tf}</span>
+          <h4>☁️ ایچیموکو (روند)</h4>
+          <div class="mtf-verdict" style="color:${bcol(s1.bias)};background:${bbg(s1.bias)}">${s1.verdict}</div>
+          ${sig1}
+        </div>
+        <div class="mtf-step">
+          <span class="tf-badge">${s2.tf}</span>
+          <h4>📊 RSI + MACD (مومنتوم)</h4>
+          <div class="mtf-verdict" style="color:${bcol(s2.bias)};background:${bbg(s2.bias)}">${s2.verdict}</div>
+          <div class="mtf-detail">▸ RSI: ${faNum(s2.rsi)} (${s2.rsi_state})</div>
+          <div class="mtf-detail">▸ MACD: ${s2.macd_state}</div>
+        </div>
+        <div class="mtf-step">
+          <span class="tf-badge">${s3.tf}</span>
+          <h4>🎯 محدوده‌های ورود</h4>
+          ${s3.nearest_support?`<div class="mtf-detail" style="color:var(--up)">▸ حمایت: $${fp(s3.nearest_support.level)} (${faNum(s3.nearest_support.dist)}٪)</div>`:'<div class="mtf-detail">حمایت نزدیکی نیست</div>'}
+          ${s3.nearest_resistance?`<div class="mtf-detail" style="color:var(--down)">▸ مقاومت: $${fp(s3.nearest_resistance.level)} (+${faNum(s3.nearest_resistance.dist)}٪)</div>`:'<div class="mtf-detail">مقاومت نزدیکی نیست</div>'}
+          <div class="mtf-detail" style="color:var(--txt3);margin-top:4px">قیمت فعلی: $${fp(s3.price)}</div>
+        </div>
+      </div>
+      <div class="scen-wrap">${scenHtml}</div>
+      <div class="disclaimer">⚠️ سناریوها بر اساس ترکیب ۳ تایم‌فریم (۱H ایچیموکو → ۴H مومنتوم → ۱۵M محدوده). آماری، نه قطعی. <span style="color:var(--txt3)">${d.ts}</span></div>
+    `;
+  }catch(e){document.getElementById('multitf').innerHTML='<div class="loading">خطا در ارتباط</div>';}
 }
 
 // نشانگر ستاپ روی pill های ارز
