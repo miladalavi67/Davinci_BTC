@@ -311,8 +311,12 @@ body::before{content:'';position:fixed;inset:0;background:
       <div id="setupBadge" class="setup-badge setup-none">در حال بررسی ستاپ…</div>
       <button class="btn" id="setupBtn" style="margin-right:auto" onclick="loadSetup()">بررسی ستاپ</button>
     </div>
-    <!-- ویجت چارت TradingView -->
-    <div id="tvchart" style="width:100%;height:480px;position:relative"></div>
+    <!-- ویجت چارت TradingView (با کلیک لود می‌شود — سبک‌تر) -->
+    <div id="tvchart" style="width:100%;height:440px;position:relative;display:none"></div>
+    <div id="tvPlaceholder" style="width:100%;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--bg3);border-radius:10px;border:1px dashed var(--border2)">
+      <span style="font-size:13px;color:var(--txt2);font-family:var(--mono)">📊 چارت حرفه‌ای TradingView</span>
+      <button class="btn" onclick="showTVChart()">نمایش چارت</button>
+    </div>
     <div id="setupDetail" class="setup-detail"></div>
     {% if role == 'admin' %}
     <!-- سنجش سطح من (فقط ادمین) -->
@@ -383,7 +387,7 @@ COINS.forEach(c=>{
   b.className='coin-pill'+(c===CURRENT?' on':'');
   b.textContent=c.replace('USDT','');
   b.dataset.symbol=c;
-  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadSummary();loadAnalysis();loadChart();loadAdvanced();loadMultitf();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
+  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadSummary();loadAnalysis();refreshChartOnCoinChange();loadAdvanced();loadMultitf();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
   coinsEl.appendChild(b);
 });
 
@@ -506,7 +510,7 @@ function selectCoin(sym){
   window.scrollTo({top:0,behavior:'smooth'});
   loadSummary();
   loadAnalysis();
-  loadChart();
+  refreshChartOnCoinChange();
   loadAdvanced();
   loadMultitf();
   resetSetup();
@@ -519,9 +523,9 @@ function resetSetup(){
   if(detail){detail.className='setup-detail';detail.innerHTML='';}
 }
 
-// ── چارت TradingView (ویجت حرفه‌ای) ──
+// ── چارت TradingView (ویجت حرفه‌ای — با کلیک لود می‌شود) ──
 function tvSymbol(){return 'BINANCE:'+CURRENT+'.P';}  // فیوچرز پرپچوال
-let tvWidget=null;
+let tvLoaded=false;
 function loadTVChart(){
   const el=document.getElementById('tvchart');
   if(!el)return;
@@ -539,17 +543,28 @@ function loadTVChart(){
     locale:'fa_IR',
     backgroundColor:'#0d131c',
     gridColor:'rgba(30,42,58,0.4)',
-    hide_side_toolbar:false,   // نوار ابزار خط‌کشی روشن
-    allow_symbol_change:true,
-    save_image:true,
-    studies:['STD;EMA','STD;RSI'],
+    hide_side_toolbar:false,
+    allow_symbol_change:false,
+    save_image:false,
     support_host:'https://www.tradingview.com'
   });
   el.appendChild(s);
 }
-// چارت TradingView نیاز به loadChart/loadSetup قدیمی ندارد؛ ستاپ جدا کار می‌کند
-let chart=null,candleSeries=null;  // برای سازگاری با کدهای دیگر
-function loadChart(){loadTVChart();}
+// چارت فقط با کلیک لود می‌شود (سبک‌تر)
+function showTVChart(){
+  const el=document.getElementById('tvchart');
+  const ph=document.getElementById('tvPlaceholder');
+  el.style.display='block';
+  ph.style.display='none';
+  loadTVChart();
+  tvLoaded=true;
+}
+// وقتی ارز عوض شد: اگر چارت قبلاً باز بود، دوباره با نماد جدید لود کن
+function refreshChartOnCoinChange(){
+  if(tvLoaded){loadTVChart();}
+}
+let chart=null,candleSeries=null;  // سازگاری
+function loadChart(){/* دیگر خودکار لود نمی‌شود — با دکمه */}
 
 async function loadSetup(){
   const btn=document.getElementById('setupBtn');btn.disabled=true;btn.textContent='در حال بررسی…';
@@ -640,10 +655,10 @@ async function analyzeLevels(){
 }
 
 
-// شروع — اول داشبورد اصلی و چارت (سریع و مهم)، بعد چیزهای سنگین با تأخیر
+// شروع — داشبورد سبک، چارت سنگین فقط با دکمه لود می‌شود
 loadSummary();
 loadAnalysis();
-loadChart();
+// چارت TradingView با دکمه «نمایش چارت» لود می‌شود (سبک‌تر)
 // overview و ستاپ سنگین‌اند (ML) — با تأخیر تا داشبورد اول کامل بیاد
 setTimeout(loadAdvanced, 2000);
  setTimeout(loadMultitf, 4000);
@@ -653,7 +668,6 @@ setTimeout(loadSetupBadges, 12000);
  setTimeout(loadLearning, 8000);   // نشانگر همه ارزها (سنگین‌ترین)
 setInterval(loadSummary,120000);
 setInterval(loadAnalysis,120000);
-setInterval(loadChart,120000);
 setInterval(loadAdvanced,180000);
 setInterval(loadMultitf,180000);
 setInterval(loadOverview,180000);
