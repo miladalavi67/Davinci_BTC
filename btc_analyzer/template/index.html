@@ -69,6 +69,16 @@ body::before{content:'';position:fixed;inset:0;background:
 .scen-row b{color:var(--txt)}
 .mtf-overall{font-size:14px;font-weight:700;text-align:center;padding:10px;border-radius:10px;background:var(--bg3);margin-bottom:14px}
 
+/* یادگیری / عملکرد */
+.learn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.learn-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}
+.learn-card h4{font-size:12px;color:var(--txt2);font-family:var(--mono);margin-bottom:10px}
+.learn-rate{font-size:30px;font-weight:800;font-family:var(--mono);line-height:1}
+.learn-bar{height:6px;border-radius:3px;background:var(--bg3);margin:8px 0;overflow:hidden}
+.learn-fill{height:100%;border-radius:3px;transition:width .6s}
+.learn-meta{font-size:10px;color:var(--txt3);font-family:var(--mono)}
+.learn-note{font-size:11px;color:var(--txt3);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px;line-height:1.7}
+
 /* نوار کاربری */
 .user-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .user-name{font-family:var(--mono);font-size:12px;color:var(--txt2);padding:5px 10px;background:var(--bg2);border-radius:7px}
@@ -278,6 +288,10 @@ body::before{content:'';position:fixed;inset:0;background:
     </div>
     <div id="mlContent"><div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن (چند ثانیه طول می‌کشد)</div></div>
   </div>
+
+  <!-- عملکرد گذشته (یادگیری) -->
+  <div class="section-label">📈 عملکرد گذشته (یادگیری از نتایج واقعی)</div>
+  <div id="learning"><div class="loading"><span class="spin"></span> در حال بارگذاری آمار…</div></div>
 
   <!-- نمای کلی -->
   <div class="section-label">نمای کلی بازار</div>
@@ -541,7 +555,8 @@ setTimeout(loadAdvanced, 2000);
  setTimeout(loadMultitf, 4000);
 setTimeout(loadOverview, 3000);
 setTimeout(loadSetup, 6000);          // ستاپ ارز فعلی
-setTimeout(loadSetupBadges, 12000);   // نشانگر همه ارزها (سنگین‌ترین)
+setTimeout(loadSetupBadges, 12000);
+ setTimeout(loadLearning, 8000);   // نشانگر همه ارزها (سنگین‌ترین)
 setInterval(loadAnalysis,120000);
 setInterval(loadChart,120000);
 setInterval(loadAdvanced,180000);
@@ -549,6 +564,7 @@ setInterval(loadMultitf,180000);
 setInterval(loadOverview,180000);
 setInterval(loadSetup,180000);
 setInterval(loadSetupBadges,300000);
+setInterval(loadLearning,600000);
 
 // ── تحلیل پیشرفته (ایچیموکو + RSI + فیبوناچی) ──
 async function loadAdvanced(){
@@ -652,6 +668,36 @@ async function loadMultitf(){
       <div class="disclaimer">⚠️ سناریوها بر اساس ترکیب ۳ تایم‌فریم (۱H ایچیموکو → ۴H مومنتوم → ۱۵M محدوده). آماری، نه قطعی. <span style="color:var(--txt3)">${d.ts}</span></div>
     `;
   }catch(e){document.getElementById('multitf').innerHTML='<div class="loading">خطا در ارتباط</div>';}
+}
+
+// ── عملکرد گذشته (یادگیری) ──
+async function loadLearning(){
+  try{
+    const r=await fetch('/api/learning');
+    const d=await r.json();
+    if(d.error){document.getElementById('learning').innerHTML='<div class="loading">خطا</div>';return;}
+    const card=(title,st)=>{
+      const wr=st.win_rate;
+      const col=wr==null?'var(--txt2)':wr>=60?'var(--up)':wr>=45?'var(--neutral)':'var(--down)';
+      const w=wr==null?0:wr;
+      return `<div class="learn-card">
+        <h4>${title}</h4>
+        <div class="learn-rate" style="color:${col}">${wr==null?'—':faNum(wr)+'٪'}</div>
+        <div class="learn-bar"><div class="learn-fill" style="width:${w}%;background:${col}"></div></div>
+        <div class="learn-meta">✅ ${faNum(st.success)} موفق · ❌ ${faNum(st.fail)} ناموفق${st.neutral?' · ⊝ '+faNum(st.neutral)+' خنثی':''}</div>
+      </div>`;
+    };
+    let cards=card('کل سیگنال‌ها',d.overall);
+    cards+=card('ستاپ‌ها',d.setups);
+    cards+=card('ستاپ صعودی',d.setup_bull);
+    cards+=card('ستاپ نزولی',d.setup_bear);
+    cards+=card('محدوده‌ها',d.zones);
+    cards+=card('محدوده با OB',d.zones_ob);
+    document.getElementById('learning').innerHTML=`
+      <div class="learn-grid">${cards}</div>
+      <div class="learn-note">📊 نرخ موفقیت بر اساس نتایج واقعی محاسبه می‌شود: هر سیگنال ۲۴ ساعت بعد سنجیده می‌شود (آیا قیمت ≥۱٪ در جهت پیش‌بینی حرکت کرد؟). خنثی‌ها در نرخ حساب نمی‌شوند. ${d.pending?faNum(d.pending)+' سیگنال در انتظار ارزیابی.':''} هرچه داده بیشتر شود، آمار دقیق‌تر می‌شود.</div>
+    `;
+  }catch(e){document.getElementById('learning').innerHTML='<div class="loading">خطا در ارتباط</div>';}
 }
 
 // نشانگر ستاپ روی pill های ارز
