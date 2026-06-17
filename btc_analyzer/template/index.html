@@ -35,6 +35,22 @@ body::before{content:'';position:fixed;inset:0;background:
 .coin-pill.on{background:var(--accent);color:#1a0c00;border-color:var(--accent);font-weight:600}
 .pill-dot{font-size:9px}
 
+/* نوار خلاصه (شبیه v17) */
+.sumbar{background:linear-gradient(135deg,var(--panel),rgba(255,147,50,.04));border:1px solid var(--border2);border-radius:14px;padding:14px 18px;margin-bottom:16px}
+.sumbar-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.sumbar-coin{font-size:18px;font-weight:800;font-family:var(--mono)}
+.sumbar-price{font-size:22px;font-weight:800;font-family:var(--mono);letter-spacing:-.02em}
+.sumbar-us{font-size:11px;font-family:var(--mono);padding:3px 10px;border-radius:6px;background:var(--bg3);color:var(--txt2)}
+.sumbar-score{margin-right:auto;display:flex;align-items:center;gap:8px}
+.sumbar-score-val{font-size:24px;font-weight:800;font-family:var(--mono)}
+.sumbar-score-lbl{font-size:10px;color:var(--txt2);font-family:var(--mono)}
+.summetrics{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+@media(max-width:900px){.summetrics{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:500px){.summetrics{grid-template-columns:repeat(2,1fr)}}
+.summetric{background:var(--bg3);border-radius:8px;padding:8px 10px;text-align:center}
+.summetric .k{font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:3px;letter-spacing:.05em}
+.summetric .v{font-size:12px;font-weight:600;font-family:var(--mono)}
+
 /* تحلیل پیشرفته */
 .adv-grid{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px}
 @media(max-width:1000px){.adv-grid{grid-template-columns:1fr}}
@@ -241,6 +257,9 @@ body::before{content:'';position:fixed;inset:0;background:
   </div>
 
 <div class="wrap">
+  <!-- نوار خلاصه (شبیه v17) -->
+  <div class="sumbar" id="sumbar"><div class="loading"><span class="spin"></span> در حال محاسبه خلاصه…</div></div>
+
   <!-- قهرمان -->
   <div class="hero">
     <div class="panel hero-price">
@@ -314,7 +333,7 @@ COINS.forEach(c=>{
   b.className='coin-pill'+(c===CURRENT?' on':'');
   b.textContent=c.replace('USDT','');
   b.dataset.symbol=c;
-  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadAnalysis();loadChart();loadAdvanced();loadMultitf();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
+  b.onclick=()=>{CURRENT=c;document.querySelectorAll('.coin-pill').forEach(x=>x.classList.remove('on'));b.classList.add('on');loadSummary();loadAnalysis();loadChart();loadAdvanced();loadMultitf();resetSetup();document.getElementById('mlContent').innerHTML='<div style="color:var(--txt3);font-size:12px;font-family:var(--mono)">برای اجرا دکمه را بزن</div>';};
   coinsEl.appendChild(b);
 });
 
@@ -435,6 +454,7 @@ function selectCoin(sym){
   CURRENT=sym;
   document.querySelectorAll('.coin-pill').forEach(x=>{x.classList.toggle('on',x.dataset.symbol===sym);});
   window.scrollTo({top:0,behavior:'smooth'});
+  loadSummary();
   loadAnalysis();
   loadChart();
   loadAdvanced();
@@ -548,6 +568,7 @@ async function loadSetup(){
 window.addEventListener('resize',()=>{if(chart){const el=document.getElementById('chartContainer');chart.applyOptions({width:el.clientWidth});}});
 
 // شروع — اول داشبورد اصلی و چارت (سریع و مهم)، بعد چیزهای سنگین با تأخیر
+loadSummary();
 loadAnalysis();
 loadChart();
 // overview و ستاپ سنگین‌اند (ML) — با تأخیر تا داشبورد اول کامل بیاد
@@ -557,6 +578,7 @@ setTimeout(loadOverview, 3000);
 setTimeout(loadSetup, 6000);          // ستاپ ارز فعلی
 setTimeout(loadSetupBadges, 12000);
  setTimeout(loadLearning, 8000);   // نشانگر همه ارزها (سنگین‌ترین)
+setInterval(loadSummary,120000);
 setInterval(loadAnalysis,120000);
 setInterval(loadChart,120000);
 setInterval(loadAdvanced,180000);
@@ -698,6 +720,39 @@ async function loadLearning(){
       <div class="learn-note">📊 نرخ موفقیت بر اساس نتایج واقعی محاسبه می‌شود: هر سیگنال ۲۴ ساعت بعد سنجیده می‌شود (آیا قیمت ≥۱٪ در جهت پیش‌بینی حرکت کرد؟). خنثی‌ها در نرخ حساب نمی‌شوند. ${d.pending?faNum(d.pending)+' سیگنال در انتظار ارزیابی.':''} هرچه داده بیشتر شود، آمار دقیق‌تر می‌شود.</div>
     `;
   }catch(e){document.getElementById('learning').innerHTML='<div class="loading">خطا در ارتباط</div>';}
+}
+
+// ── نوار خلاصه (شبیه v17) ──
+async function loadSummary(){
+  try{
+    const r=await fetch(`/api/summary?symbol=${CURRENT}`);
+    const d=await r.json();
+    if(d.error){document.getElementById('sumbar').innerHTML='<div class="loading">خطا</div>';return;}
+    const tcol=c=>c.includes('bull')?'var(--up)':c.includes('bear')?'var(--down)':'var(--neutral)';
+    const scol=d.bias_cls==='bull'?'var(--up)':d.bias_cls==='bear'?'var(--down)':'var(--neutral)';
+    const rcol=d.rsi1>=70?'var(--down)':d.rsi1<=30?'var(--up)':'var(--txt)';
+    document.getElementById('sumbar').innerHTML=`
+      <div class="sumbar-top">
+        <span class="sumbar-coin" style="color:var(--accent)">₿ ${d.symbol.replace('USDT','')}</span>
+        <span class="sumbar-price">$${fp(d.price)}</span>
+        <span class="sumbar-us">US: ${d.us_session}</span>
+        <div class="sumbar-score">
+          <div>
+            <div class="sumbar-score-val" style="color:${scol}">${faNum(d.score)}</div>
+            <div class="sumbar-score-lbl">SCORE · ${d.bias}</div>
+          </div>
+        </div>
+      </div>
+      <div class="summetrics">
+        <div class="summetric"><div class="k">4H</div><div class="v" style="color:${tcol(d.tf4.cls)}">${d.tf4.label}</div></div>
+        <div class="summetric"><div class="k">1H</div><div class="v" style="color:${tcol(d.tf1.cls)}">${d.tf1.label}</div></div>
+        <div class="summetric"><div class="k">RSI 1H</div><div class="v" style="color:${rcol}">${faNum(d.rsi1)}</div></div>
+        <div class="summetric"><div class="k">ایچیموکو</div><div class="v">${d.ichimoku}</div></div>
+        <div class="summetric"><div class="k">MACD 4H</div><div class="v" style="color:${d.macd4==='صعودی'?'var(--up)':'var(--down)'}">${d.macd4}</div></div>
+        <div class="summetric"><div class="k">FIB</div><div class="v" style="font-size:10px">${d.fib}</div></div>
+      </div>
+    `;
+  }catch(e){document.getElementById('sumbar').innerHTML='<div class="loading">خطا در ارتباط</div>';}
 }
 
 // نشانگر ستاپ روی pill های ارز
