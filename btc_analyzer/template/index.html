@@ -51,6 +51,23 @@ body::before{content:'';position:fixed;inset:0;background:
 .summetric .k{font-size:9px;color:var(--txt3);font-family:var(--mono);margin-bottom:3px;letter-spacing:.05em}
 .summetric .v{font-size:12px;font-weight:600;font-family:var(--mono)}
 
+/* ابزار خط‌کشی (ادمین) */
+.drawbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.draw-title{font-size:12px;font-family:var(--mono);color:var(--gold)}
+.draw-btn{font-family:var(--sans);font-size:12px;padding:6px 13px;border-radius:7px;border:1px solid var(--border2);background:var(--bg2);color:var(--txt2);cursor:pointer;transition:all .15s}
+.draw-btn:hover{border-color:var(--accent);color:var(--txt)}
+.draw-btn.on{background:var(--accent);color:#1a0c00;border-color:var(--accent);font-weight:600}
+.draw-btn.analyze{border-color:var(--accent2);color:var(--accent2);background:rgba(91,140,255,.1)}
+.draw-btn.analyze:hover{background:rgba(91,140,255,.2)}
+.draw-hint{font-size:11px;color:var(--txt3);font-family:var(--mono)}
+.line-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:10px}
+.line-card.valid{border-right:3px solid var(--up)}
+.line-card.invalid{border-right:3px solid var(--down)}
+.line-card h5{font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.line-reason{font-size:11px;color:var(--txt2);font-family:var(--mono);padding:2px 0;display:flex;gap:6px}
+.line-reason::before{content:'▸';color:var(--accent)}
+.line-verdict{font-size:14px;font-weight:700;text-align:center;padding:12px;border-radius:10px;margin-top:12px}
+
 /* تحلیل پیشرفته */
 .adv-grid{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px}
 @media(max-width:1000px){.adv-grid{grid-template-columns:1fr}}
@@ -255,6 +272,7 @@ body::before{content:'';position:fixed;inset:0;background:
     </div>
     <div id="pwMsg" class="user-msg"></div>
   </div>
+</div>
 
 <div class="wrap">
   <!-- نوار خلاصه (شبیه v17) -->
@@ -287,6 +305,17 @@ body::before{content:'';position:fixed;inset:0;background:
     </div>
     <div id="chartContainer" style="width:100%;height:340px;position:relative"></div>
     <div id="setupDetail" class="setup-detail"></div>
+    {% if role == 'admin' %}
+    <!-- ابزار خط‌کشی (فقط ادمین) -->
+    <div class="drawbar">
+      <span class="draw-title">✏️ خط‌کشی من (خبره):</span>
+      <button class="draw-btn" id="drawToggle" onclick="toggleDraw()">شروع خط‌کشی</button>
+      <button class="draw-btn" onclick="clearLines()">پاک کردن</button>
+      <button class="draw-btn analyze" onclick="analyzeLines()">🔍 تحلیل خط‌های من</button>
+      <span class="draw-hint" id="drawHint">دو نقطه بزن تا خط کشیده شود</span>
+    </div>
+    <div id="lineResult"></div>
+    {% endif %}
   </div>
 
   <!-- تحلیل پیشرفته: ایچیموکو + RSI + فیبوناچی -->
@@ -474,7 +503,7 @@ let chart=null,candleSeries=null,ema50Series=null,ema200Series=null;
 
 function initChart(){
   const el=document.getElementById('chartContainer');
-  if(chart){chart.remove();chart=null;}
+  if(chart){chart.remove();chart=null;clickHandler=null;userLines=[];drawPoints=[];}
   chart=LightweightCharts.createChart(el,{
     width:el.clientWidth,height:340,
     layout:{background:{color:'transparent'},textColor:'#6b8199',fontFamily:'IBM Plex Mono'},
@@ -489,6 +518,8 @@ function initChart(){
   });
   ema50Series=chart.addLineSeries({color:'#5b8cff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   ema200Series=chart.addLineSeries({color:'#ff9332',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  // اگر حالت خط‌کشی روشن بود، دوباره وصل کن
+  if(typeof drawMode!=='undefined'&&drawMode){clickHandler=null;attachClick();}
 }
 
 async function loadChart(){
@@ -566,6 +597,93 @@ async function loadSetup(){
 
 // resize چارت
 window.addEventListener('resize',()=>{if(chart){const el=document.getElementById('chartContainer');chart.applyOptions({width:el.clientWidth});}});
+
+// ── ابزار خط‌کشی (ادمین) ──
+let drawMode=false;
+let drawPoints=[];      // نقاط موقت خط فعلی
+let userLines=[];       // خط‌های کشیده‌شده {p1,p2,series}
+let clickHandler=null;
+
+function toggleDraw(){
+  drawMode=!drawMode;
+  const btn=document.getElementById('drawToggle');
+  const hint=document.getElementById('drawHint');
+  if(drawMode){
+    btn.classList.add('on');btn.textContent='در حال خط‌کشی…';
+    hint.textContent='نقطه اول را روی چارت بزن';
+    attachClick();
+  }else{
+    btn.classList.remove('on');btn.textContent='شروع خط‌کشی';
+    hint.textContent='خط‌کشی متوقف شد';
+    drawPoints=[];
+  }
+}
+
+function attachClick(){
+  if(!chart||clickHandler)return;
+  clickHandler=(param)=>{
+    if(!drawMode||!param.point||!param.time)return;
+    // قیمت را از مختصات y بگیر
+    const price=candleSeries.coordinateToPrice(param.point.y);
+    if(price==null)return;
+    const t=param.time;  // timestamp ثانیه
+    drawPoints.push({time:t,price:price});
+    const hint=document.getElementById('drawHint');
+    if(drawPoints.length===1){
+      hint.textContent='نقطه دوم را بزن';
+    }else if(drawPoints.length===2){
+      // خط بساز
+      const p1=drawPoints[0],p2=drawPoints[1];
+      const lineSeries=chart.addLineSeries({color:'#ffd24a',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+      const sorted=[p1,p2].sort((a,b)=>a.time-b.time);
+      lineSeries.setData(sorted.map(p=>({time:p.time,value:p.price})));
+      userLines.push({p1:p1,p2:p2,series:lineSeries});
+      drawPoints=[];
+      hint.textContent=`${faNum(userLines.length)} خط کشیده شد · نقطه اول خط بعدی را بزن (یا تحلیل کن)`;
+    }
+  };
+  chart.subscribeClick(clickHandler);
+}
+
+function clearLines(){
+  userLines.forEach(l=>{try{chart.removeSeries(l.series);}catch(e){}});
+  userLines=[];drawPoints=[];
+  document.getElementById('lineResult').innerHTML='';
+  document.getElementById('drawHint').textContent='همه خط‌ها پاک شد';
+}
+
+async function analyzeLines(){
+  if(userLines.length===0){
+    document.getElementById('lineResult').innerHTML='<div class="line-card invalid"><div class="line-reason">اول حداقل یک خط بکش</div></div>';
+    return;
+  }
+  const lr=document.getElementById('lineResult');
+  lr.innerHTML='<div class="loading"><span class="spin"></span> سیستم در حال سنجیدن خط‌های تو…</div>';
+  const payload={symbol:CURRENT,interval:'1h',lines:userLines.map(l=>({p1:l.p1,p2:l.p2}))};
+  try{
+    const r=await fetch('/api/analyze_lines',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(d.error){lr.innerHTML='<div class="line-card invalid"><div class="line-reason">خطا: '+d.error+'</div></div>';return;}
+    const typeFa={horizontal:'افقی',rising:'صعودی',falling:'نزولی'};
+    const roleFa={support:'حمایت',resistance:'مقاومت',trend_up:'خط روند صعودی',trend_down:'خط روند نزولی'};
+    let html='';
+    d.lines.forEach((ln,i)=>{
+      if(ln.error){html+=`<div class="line-card invalid"><h5>خط ${faNum(i+1)} ❌</h5><div class="line-reason">${ln.reasons[0]}</div></div>`;return;}
+      const cls=ln.valid?'valid':'invalid';
+      const icon=ln.valid?'✅':'❌';
+      let reasons=ln.reasons.map(r=>`<div class="line-reason">${r}</div>`).join('');
+      html+=`<div class="line-card ${cls}">
+        <h5>خط ${faNum(i+1)} ${icon} — ${typeFa[ln.type]||ln.type} (${roleFa[ln.role]||ln.role}) @ $${fp(ln.line_price_now)}</h5>
+        ${reasons}
+      </div>`;
+    });
+    const vcol=d.net_direction==='bull'?'var(--up)':d.net_direction==='bear'?'var(--down)':'var(--neutral)';
+    const vbg=d.net_direction==='bull'?'rgba(38,217,127,.12)':d.net_direction==='bear'?'rgba(255,77,106,.12)':'rgba(245,183,64,.12)';
+    html+=`<div class="line-verdict" style="color:${vcol};background:${vbg}">${d.verdict}</div>
+      <div class="disclaimer">سیستم خط‌های تو را با داده واقعی (لمس‌های گذشته + Order Block + فیبوناچی) سنجید. فقط خط‌های معتبر (✅) در تحلیل سشن US دخیل می‌شوند. خط‌های نامعتبر (❌) با دلیل رد شدند. ${faNum(d.valid_count)} از ${faNum(d.total_count)} خط معتبر بود.</div>`;
+    lr.innerHTML=html;
+  }catch(e){lr.innerHTML='<div class="line-card invalid"><div class="line-reason">خطا در ارتباط با سرور</div></div>';}
+}
 
 // شروع — اول داشبورد اصلی و چارت (سریع و مهم)، بعد چیزهای سنگین با تأخیر
 loadSummary();
