@@ -20,6 +20,7 @@ from advanced import advanced_analysis
 from multitf import multi_tf_analysis
 from notify import notify_setup
 from learning import init_learning, record_prediction, evaluate_pending, get_stats
+from summary import btc_summary
 from auth import (init_auth, verify_user, create_user, change_password,
                  delete_user, list_users, login_required, admin_required)
 
@@ -241,6 +242,20 @@ def api_learning():
     def do():
         return get_stats()
     return jsonify(cached("learning_stats", do, ttl=300))
+
+
+@app.route("/api/summary")
+@login_required
+def api_summary():
+    """نوار خلاصه متریک‌های کلیدی (شبیه v17)"""
+    symbol = request.args.get("symbol", "BTCUSDT").upper()
+    if symbol not in COINS:
+        return jsonify({"error": "ارز نامعتبر"}), 400
+
+    def do():
+        return btc_summary(symbol) or {"error": "تحلیل ناموفق"}
+
+    return jsonify(cached(f"summary_{symbol}", do, ttl=90))
 
 
 @app.route("/api/setup")
