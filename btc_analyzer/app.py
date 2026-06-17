@@ -19,6 +19,7 @@ from setup import detect_setup, get_chart_data
 from advanced import advanced_analysis
 from multitf import multi_tf_analysis
 from notify import notify_setup
+from learning import init_learning, record_prediction, evaluate_pending, get_stats
 from auth import (init_auth, verify_user, create_user, change_password,
                  delete_user, list_users, login_required, admin_required)
 
@@ -38,9 +39,10 @@ _cache = {}
 CACHE_TTL = 120  # ثانیه
 
 
-def cached(key, fn):
+def cached(key, fn, ttl=None):
     now = time.time()
-    if key in _cache and now - _cache[key]["ts"] < CACHE_TTL:
+    limit = ttl if ttl is not None else CACHE_TTL
+    if key in _cache and now - _cache[key]["ts"] < limit:
         return _cache[key]["data"]
     data = fn()
     _cache[key] = {"ts": now, "data": data}
@@ -232,6 +234,15 @@ def api_multitf():
     return jsonify(cached(f"multitf_{symbol}", do))
 
 
+@app.route("/api/learning")
+@login_required
+def api_learning():
+    """آمار یادگیری: نرخ موفقیت ستاپ‌ها و محدوده‌ها"""
+    def do():
+        return get_stats()
+    return jsonify(cached("learning_stats", do, ttl=300))
+
+
 @app.route("/api/setup")
 @login_required
 def api_setup():
@@ -263,11 +274,17 @@ def background_setup_scan():
                         _setup_scan["results"][sym] = res
                         # کش فردی هم به‌روز شود
                         _cache[f"setup_{sym}"] = {"ts": time.time(), "data": res}
-                        # اگر ستاپ معتبر بود، به اعضای ربات تلگرام خبر بده
-                        try:
-                            notify_setup(sym, res)
-                        except Exception as e:
-                            print(f"[!] notify: {e}")
+                        # اگر ستاپ معتبر بود، به اعضای ربات تلگرام خبر بده + ثبت برای یادگیری
+                        if res.get("has_setup"):
+                            try:
+                                notify_setup(sym, res)
+                            except Exception as e:
+                                print(f"[!] notify: {e}")
+                            try:
+                                record_prediction(sym, "setup", res["direction"],
+                                                  res["direction"], res["price"])
+                            except Exception as e:
+                                print(f"[!] record: {e}")
                     time.sleep(2)  # فاصله بین ارزها (فشار کمتر)
                 except Exception:
                     pass
@@ -316,13 +333,31 @@ def compute_bias(timeframes):
     }
 
 
+def evaluation_loop():
+    """هر ساعت پیش‌بینی‌های گذشته را ارزیابی می‌کند (یادگیری)"""
+    while True:
+        try:
+            n = evaluate_pending()
+            if n:
+                print(f"[+] {n} پیش‌بینی ارزیابی شد (یادگیری)")
+        except Exception as e:
+            print(f"[!] evaluation: {e}")
+        time.sleep(3600)  # هر ساعت
+
+
 def start_background():
-    """ترد اسکن پس‌زمینه ستاپ را روشن می‌کند (یک‌بار)"""
+    """تردهای پس‌زمینه را روشن می‌کند (یک‌بار)"""
     if not getattr(start_background, "_started", False):
         start_background._started = True
+        try:
+            init_learning()
+        except Exception as e:
+            print(f"[!] init_learning: {e}")
         if HAS_SKLEARN:
             threading.Thread(target=background_setup_scan, daemon=True).start()
             print("[+] اسکن پس‌زمینه ستاپ روشن شد (هر ۱۰ دقیقه)")
+        threading.Thread(target=evaluation_loop, daemon=True).start()
+        print("[+] حلقه یادگیری روشن شد (ارزیابی هر ساعت)")
 
 
 # روشن کردن خودکار هنگام import (برای serve.py / waitress)
