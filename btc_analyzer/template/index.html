@@ -68,6 +68,14 @@ body::before{content:'';position:fixed;inset:0;background:
 .line-reason::before{content:'▸';color:var(--accent)}
 .line-verdict{font-size:14px;font-weight:700;text-align:center;padding:12px;border-radius:10px;margin-top:12px}
 
+/* فرم سنجش سطح */
+.level-form{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.level-row{display:flex;gap:8px;flex-wrap:wrap}
+.level-row input,.level-row select{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--txt);font-family:var(--mono);font-size:13px}
+.level-row input{flex:1;min-width:140px}
+.level-row input:focus,.level-row select:focus{outline:none;border-color:var(--accent)}
+.level-row select{cursor:pointer}
+
 /* تحلیل پیشرفته */
 .adv-grid{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px}
 @media(max-width:1000px){.adv-grid{grid-template-columns:1fr}}
@@ -297,22 +305,35 @@ body::before{content:'';position:fixed;inset:0;background:
   <div class="tf-grid" id="tfGrid"><div class="loading"><span class="spin"></span> در حال دریافت داده…</div></div>
 
   <!-- چارت ۱ ساعته با تشخیص ستاپ -->
-  <div class="section-label">چارت ۱ ساعته + تشخیص ستاپ</div>
+  <div class="section-label">چارت حرفه‌ای (TradingView) + تشخیص ستاپ</div>
   <div class="panel" id="chartPanel">
     <div class="chart-head">
       <div id="setupBadge" class="setup-badge setup-none">در حال بررسی ستاپ…</div>
       <button class="btn" id="setupBtn" style="margin-right:auto" onclick="loadSetup()">بررسی ستاپ</button>
     </div>
-    <div id="chartContainer" style="width:100%;height:340px;position:relative"></div>
+    <!-- ویجت چارت TradingView -->
+    <div id="tvchart" style="width:100%;height:480px;position:relative"></div>
     <div id="setupDetail" class="setup-detail"></div>
     {% if role == 'admin' %}
-    <!-- ابزار خط‌کشی (فقط ادمین) -->
+    <!-- سنجش سطح من (فقط ادمین) -->
     <div class="drawbar">
-      <span class="draw-title">✏️ خط‌کشی من (خبره):</span>
-      <button class="draw-btn" id="drawToggle" onclick="toggleDraw()">شروع خط‌کشی</button>
-      <button class="draw-btn" onclick="clearLines()">پاک کردن</button>
-      <button class="draw-btn analyze" onclick="analyzeLines()">🔍 تحلیل خط‌های من</button>
-      <span class="draw-hint" id="drawHint">دو نقطه بزن تا خط کشیده شود</span>
+      <span class="draw-title">🎯 سنجش سطح/خط من (خبره):</span>
+      <span class="draw-hint">روی چارت بالا خطتو بکش، بعد عددِ سطح مهم رو اینجا وارد کن تا سیستم بسنجه</span>
+    </div>
+    <div class="level-form" id="levelForm">
+      <div class="level-row" data-idx="0">
+        <input type="number" step="any" class="lvl-price" placeholder="قیمت سطح (مثلاً 67000)">
+        <select class="lvl-type">
+          <option value="auto">تشخیص خودکار</option>
+          <option value="support">حمایت</option>
+          <option value="resistance">مقاومت</option>
+          <option value="trendline">خط روند</option>
+        </select>
+      </div>
+    </div>
+    <div class="drawbar" style="border-top:none;padding-top:6px">
+      <button class="draw-btn" onclick="addLevelRow()">+ سطح دیگر</button>
+      <button class="draw-btn analyze" onclick="analyzeLevels()">🔍 سنجش سطوح من</button>
     </div>
     <div id="lineResult"></div>
     {% endif %}
@@ -498,51 +519,37 @@ function resetSetup(){
   if(detail){detail.className='setup-detail';detail.innerHTML='';}
 }
 
-// ── چارت ۱ ساعته + ستاپ ──
-let chart=null,candleSeries=null,ema50Series=null,ema200Series=null;
-
-function initChart(){
-  const el=document.getElementById('chartContainer');
-  if(chart){chart.remove();chart=null;clickHandler=null;userLines=[];drawPoints=[];}
-  chart=LightweightCharts.createChart(el,{
-    width:el.clientWidth,height:340,
-    layout:{background:{color:'transparent'},textColor:'#6b8199',fontFamily:'IBM Plex Mono'},
-    grid:{vertLines:{color:'rgba(30,42,58,.4)'},horzLines:{color:'rgba(30,42,58,.4)'}},
-    rightPriceScale:{borderColor:'#1e2a3a'},
-    timeScale:{borderColor:'#1e2a3a',timeVisible:true},
-    crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
+// ── چارت TradingView (ویجت حرفه‌ای) ──
+function tvSymbol(){return 'BINANCE:'+CURRENT+'.P';}  // فیوچرز پرپچوال
+let tvWidget=null;
+function loadTVChart(){
+  const el=document.getElementById('tvchart');
+  if(!el)return;
+  el.innerHTML='';
+  const s=document.createElement('script');
+  s.src='https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  s.async=true;
+  s.innerHTML=JSON.stringify({
+    autosize:true,
+    symbol:tvSymbol(),
+    interval:'60',
+    timezone:'Asia/Tehran',
+    theme:'dark',
+    style:'1',
+    locale:'fa_IR',
+    backgroundColor:'#0d131c',
+    gridColor:'rgba(30,42,58,0.4)',
+    hide_side_toolbar:false,   // نوار ابزار خط‌کشی روشن
+    allow_symbol_change:true,
+    save_image:true,
+    studies:['STD;EMA','STD;RSI'],
+    support_host:'https://www.tradingview.com'
   });
-  candleSeries=chart.addCandlestickSeries({
-    upColor:'#26d97f',downColor:'#ff4d6a',borderVisible:false,
-    wickUpColor:'#26d97f',wickDownColor:'#ff4d6a',
-  });
-  ema50Series=chart.addLineSeries({color:'#5b8cff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-  ema200Series=chart.addLineSeries({color:'#ff9332',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-  // اگر حالت خط‌کشی روشن بود، دوباره وصل کن
-  if(typeof drawMode!=='undefined'&&drawMode){clickHandler=null;attachClick();}
+  el.appendChild(s);
 }
-
-async function loadChart(){
-  try{
-    const r=await fetch(`/api/chart?symbol=${CURRENT}`);
-    const d=await r.json();
-    if(d.error||!d.candles){return;}
-    if(!chart)initChart();
-    candleSeries.setData(d.candles);
-    if(d.ema50&&d.ema50.length)ema50Series.setData(d.ema50);
-    if(d.ema200&&d.ema200.length)ema200Series.setData(d.ema200);
-    // اوردر بلاک‌ها به‌صورت خط افقی
-    candleSeries.setMarkers([]);
-    const obLines=[];
-    (d.order_blocks.bull||[]).slice(0,2).forEach(o=>{
-      candleSeries.createPriceLine({price:o.mid,color:'rgba(38,217,127,.5)',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'OB صعودی'});
-    });
-    (d.order_blocks.bear||[]).slice(0,2).forEach(o=>{
-      candleSeries.createPriceLine({price:o.mid,color:'rgba(255,77,106,.5)',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'OB نزولی'});
-    });
-    chart.timeScale().fitContent();
-  }catch(e){}
-}
+// چارت TradingView نیاز به loadChart/loadSetup قدیمی ندارد؛ ستاپ جدا کار می‌کند
+let chart=null,candleSeries=null;  // برای سازگاری با کدهای دیگر
+function loadChart(){loadTVChart();}
 
 async function loadSetup(){
   const btn=document.getElementById('setupBtn');btn.disabled=true;btn.textContent='در حال بررسی…';
@@ -557,18 +564,6 @@ async function loadSetup(){
       const isBull=d.direction==='bull';
       badge.className='setup-badge '+(isBull?'setup-bull':'setup-bear');
       badge.textContent=`${isBull?'🟢 ستاپ صعودی':'🔴 ستاپ نزولی'} تأیید شد! (ML ${faNum(d.ml_prob)}٪)`;
-      // علامت روی چارت در نقطه فعلی
-      if(candleSeries){
-        const r2=await fetch(`/api/chart?symbol=${CURRENT}`);const cd=await r2.json();
-        if(cd.candles&&cd.candles.length){
-          const last=cd.candles[cd.candles.length-1];
-          candleSeries.setMarkers([{
-            time:last.time,position:isBull?'belowBar':'aboveBar',
-            color:isBull?'#26d97f':'#ff4d6a',shape:isBull?'arrowUp':'arrowDown',
-            text:`ستاپ ${faNum(d.ml_prob)}٪`
-          }]);
-        }
-      }
       let factorHtml=d.factors.map(f=>`<span class="factor-chip ${isBull?'':'bear'}">${f}</span>`).join('');
       let entryHtml='';
       if(d.entry_zone){entryHtml=`<div class="setup-metric">ناحیه ورود (OB): $${fp(d.entry_zone.mid)} (${d.entry_zone.dist>0?'+':''}${faNum(d.entry_zone.dist)}٪)${d.entry_zone.fvg?' · FVG✓':''}</div>`;}
@@ -581,13 +576,12 @@ async function loadSetup(){
           ${entryHtml}
         </div>
         <div class="setup-row">${factorHtml}</div>
-        <div class="disclaimer">⚠️ ستاپ یعنی ML بالای ۷۰٪ + حداقل ۵ فاکتور هم‌جهت. این آماری است نه قطعی — همیشه مدیریت ریسک و تأیید چشمی کن.</div>
+        <div class="disclaimer">⚠️ ستاپ یعنی ML بالای ۷۰٪ + حداقل ۵ فاکتور هم‌جهت. آماری است نه قطعی — مدیریت ریسک کن.</div>
       `;
     } else {
       badge.className='setup-badge setup-none';
       const reason=d.reason||`Confluence کافی نیست (${faNum(d.conf_score||0)}/${faNum(d.conf_min||5)})`;
       badge.textContent=`⏸ ستاپ معتبری نیست — ${reason}`;
-      if(candleSeries)candleSeries.setMarkers([]);
       detail.className='setup-detail show';
       detail.innerHTML=`<div class="setup-row"><span class="setup-metric">ML خام: ${d.ml_bull_raw!=null?faNum(d.ml_bull_raw)+'٪ صعود':'—'}</span>${d.conf_score!=null?`<span class="setup-metric">Confluence: ${faNum(d.conf_score)}/${faNum(d.conf_min)}</span>`:''}</div><div style="font-size:11px;color:var(--txt3);font-family:var(--mono)">برای ستاپ معتبر، هم ML باید بالای ۷۰٪ باشد هم حداقل ۵ فاکتور هم‌جهت.</div>`;
     }
@@ -595,95 +589,56 @@ async function loadSetup(){
   btn.disabled=false;btn.textContent='بررسی مجدد ستاپ';
 }
 
-// resize چارت
-window.addEventListener('resize',()=>{if(chart){const el=document.getElementById('chartContainer');chart.applyOptions({width:el.clientWidth});}});
-
-// ── ابزار خط‌کشی (ادمین) ──
-let drawMode=false;
-let drawPoints=[];      // نقاط موقت خط فعلی
-let userLines=[];       // خط‌های کشیده‌شده {p1,p2,series}
-let clickHandler=null;
-
-function toggleDraw(){
-  drawMode=!drawMode;
-  const btn=document.getElementById('drawToggle');
-  const hint=document.getElementById('drawHint');
-  if(drawMode){
-    btn.classList.add('on');btn.textContent='در حال خط‌کشی…';
-    hint.textContent='نقطه اول را روی چارت بزن';
-    attachClick();
-  }else{
-    btn.classList.remove('on');btn.textContent='شروع خط‌کشی';
-    hint.textContent='خط‌کشی متوقف شد';
-    drawPoints=[];
-  }
+// ── فرم سنجش سطح من (ادمین) ──
+function addLevelRow(){
+  const form=document.getElementById('levelForm');
+  const idx=form.children.length;
+  const row=document.createElement('div');
+  row.className='level-row';row.dataset.idx=idx;
+  row.innerHTML=`<input type="number" step="any" class="lvl-price" placeholder="قیمت سطح">
+    <select class="lvl-type">
+      <option value="auto">تشخیص خودکار</option>
+      <option value="support">حمایت</option>
+      <option value="resistance">مقاومت</option>
+      <option value="trendline">خط روند</option>
+    </select>`;
+  form.appendChild(row);
 }
 
-function attachClick(){
-  if(!chart||clickHandler)return;
-  clickHandler=(param)=>{
-    if(!drawMode||!param.point||!param.time)return;
-    // قیمت را از مختصات y بگیر
-    const price=candleSeries.coordinateToPrice(param.point.y);
-    if(price==null)return;
-    const t=param.time;  // timestamp ثانیه
-    drawPoints.push({time:t,price:price});
-    const hint=document.getElementById('drawHint');
-    if(drawPoints.length===1){
-      hint.textContent='نقطه دوم را بزن';
-    }else if(drawPoints.length===2){
-      // خط بساز
-      const p1=drawPoints[0],p2=drawPoints[1];
-      const lineSeries=chart.addLineSeries({color:'#ffd24a',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
-      const sorted=[p1,p2].sort((a,b)=>a.time-b.time);
-      lineSeries.setData(sorted.map(p=>({time:p.time,value:p.price})));
-      userLines.push({p1:p1,p2:p2,series:lineSeries});
-      drawPoints=[];
-      hint.textContent=`${faNum(userLines.length)} خط کشیده شد · نقطه اول خط بعدی را بزن (یا تحلیل کن)`;
-    }
-  };
-  chart.subscribeClick(clickHandler);
-}
-
-function clearLines(){
-  userLines.forEach(l=>{try{chart.removeSeries(l.series);}catch(e){}});
-  userLines=[];drawPoints=[];
-  document.getElementById('lineResult').innerHTML='';
-  document.getElementById('drawHint').textContent='همه خط‌ها پاک شد';
-}
-
-async function analyzeLines(){
-  if(userLines.length===0){
-    document.getElementById('lineResult').innerHTML='<div class="line-card invalid"><div class="line-reason">اول حداقل یک خط بکش</div></div>';
-    return;
-  }
+async function analyzeLevels(){
+  const rows=document.querySelectorAll('#levelForm .level-row');
+  const levels=[];
+  rows.forEach(r=>{
+    const price=parseFloat(r.querySelector('.lvl-price').value);
+    const type=r.querySelector('.lvl-type').value;
+    if(!isNaN(price)&&price>0)levels.push({price:price,type:type});
+  });
   const lr=document.getElementById('lineResult');
-  lr.innerHTML='<div class="loading"><span class="spin"></span> سیستم در حال سنجیدن خط‌های تو…</div>';
-  const payload={symbol:CURRENT,interval:'1h',lines:userLines.map(l=>({p1:l.p1,p2:l.p2}))};
+  if(levels.length===0){lr.innerHTML='<div class="line-card invalid"><div class="line-reason">اول حداقل یک سطح (عدد) وارد کن</div></div>';return;}
+  lr.innerHTML='<div class="loading"><span class="spin"></span> سیستم در حال سنجیدن سطوح تو…</div>';
   try{
-    const r=await fetch('/api/analyze_lines',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const r=await fetch('/api/analyze_levels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:CURRENT,interval:'1h',levels:levels})});
     const d=await r.json();
     if(d.error){lr.innerHTML='<div class="line-card invalid"><div class="line-reason">خطا: '+d.error+'</div></div>';return;}
-    const typeFa={horizontal:'افقی',rising:'صعودی',falling:'نزولی'};
-    const roleFa={support:'حمایت',resistance:'مقاومت',trend_up:'خط روند صعودی',trend_down:'خط روند نزولی'};
+    const roleFa={support:'حمایت',resistance:'مقاومت',trendline:'خط روند'};
     let html='';
-    d.lines.forEach((ln,i)=>{
-      if(ln.error){html+=`<div class="line-card invalid"><h5>خط ${faNum(i+1)} ❌</h5><div class="line-reason">${ln.reasons[0]}</div></div>`;return;}
+    d.levels.forEach((ln,i)=>{
       const cls=ln.valid?'valid':'invalid';
       const icon=ln.valid?'✅':'❌';
-      let reasons=ln.reasons.map(r=>`<div class="line-reason">${r}</div>`).join('');
+      let reasons=ln.reasons.map(x=>`<div class="line-reason">${x}</div>`).join('');
       html+=`<div class="line-card ${cls}">
-        <h5>خط ${faNum(i+1)} ${icon} — ${typeFa[ln.type]||ln.type} (${roleFa[ln.role]||ln.role}) @ $${fp(ln.line_price_now)}</h5>
+        <h5>سطح ${faNum(i+1)} ${icon} — ${roleFa[ln.role]||ln.role} @ $${fp(ln.price)}</h5>
         ${reasons}
       </div>`;
     });
     const vcol=d.net_direction==='bull'?'var(--up)':d.net_direction==='bear'?'var(--down)':'var(--neutral)';
     const vbg=d.net_direction==='bull'?'rgba(38,217,127,.12)':d.net_direction==='bear'?'rgba(255,77,106,.12)':'rgba(245,183,64,.12)';
     html+=`<div class="line-verdict" style="color:${vcol};background:${vbg}">${d.verdict}</div>
-      <div class="disclaimer">سیستم خط‌های تو را با داده واقعی (لمس‌های گذشته + Order Block + فیبوناچی) سنجید. فقط خط‌های معتبر (✅) در تحلیل سشن US دخیل می‌شوند. خط‌های نامعتبر (❌) با دلیل رد شدند. ${faNum(d.valid_count)} از ${faNum(d.total_count)} خط معتبر بود.</div>`;
+      <div class="disclaimer">سیستم سطوح تو را با داده واقعی (لمس‌های گذشته + Order Block + فیبوناچی) سنجید. فقط سطوح معتبر (✅) در تحلیل سشن US دخیل می‌شوند. ${faNum(d.valid_count)} از ${faNum(d.total_count)} سطح معتبر بود.</div>`;
     lr.innerHTML=html;
   }catch(e){lr.innerHTML='<div class="line-card invalid"><div class="line-reason">خطا در ارتباط با سرور</div></div>';}
 }
+
 
 // شروع — اول داشبورد اصلی و چارت (سریع و مهم)، بعد چیزهای سنگین با تأخیر
 loadSummary();
