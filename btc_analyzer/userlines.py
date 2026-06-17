@@ -131,7 +131,135 @@ def validate_line(df, p1, p2):
     }
 
 
-def analyze_user_lines(symbol, lines, interval="1h"):
+def validate_level(df, level_price, hint_type="auto"):
+    """
+    یک سطح قیمت (افقی) را با داده واقعی می‌سنجد.
+    level_price: عدد قیمت که کاربر وارد کرده
+    hint_type: auto/support/resistance/trendline
+    """
+    price = float(df["close"].iloc[-1])
+    atr_val = float(atr(df).iloc[-1])
+    tol = atr_val * 0.6
+
+    highs = df["high"].tolist(); lows = df["low"].tolist()
+
+    # شمارش لمس‌های واقعی این سطح
+    touches = 0
+    for i in range(len(df)):
+        if lows[i] - tol <= level_price <= highs[i] + tol:
+            touches += 1
+
+    reasons = []
+    valid = False
+    strength = 0
+
+    if touches >= 3:
+        valid = True; strength = 3
+        reasons.append(f"این سطح {touches} بار توسط قیمت لمس شده — معتبر")
+    elif touches == 2:
+        valid = True; strength = 2
+        reasons.append(f"این سطح {touches} بار لمس شده — نسبتاً معتبر")
+    elif touches == 1:
+        valid = False; strength = 1
+        reasons.append("فقط ۱ لمس — برای سطح معتبر حداقل ۲ لمس لازم است")
+    else:
+        valid = False; strength = 0
+        reasons.append("هیچ لمس واقعی پیدا نشد — قیمت هیچ‌وقت به این سطح واکنش نشان نداده")
+
+    # تطبیق با Order Block
+    sys_match = None
+    obs = detect_order_blocks(df)
+    all_obs = [o["mid"] for o in obs.get("bull", [])] + [o["mid"] for o in obs.get("bear", [])]
+    for ob in all_obs:
+        if abs(ob - level_price) / level_price < 0.008:
+            sys_match = "order_block"
+            reasons.append(f"با Order Block سیستم (${round(ob,1)}) هم‌پوشانی دارد — تأیید قوی")
+            strength += 1
+            break
+
+    if not sys_match:
+        zinfo = important_zones(df)
+        for z in zinfo["zones"]:
+            if abs(z["level"] - level_price) / level_price < 0.008:
+                sys_match = "fib"
+                reasons.append(f"نزدیک سطح فیبوناچی {z['fib']} است — هم‌خوان با سیستم")
+                strength += 1
+                break
+
+    if not sys_match and valid:
+        reasons.append("با سطوح کلیدی سیستم (OB/فیبو) هم‌پوشانی ندارد — ولی لمس‌های واقعی دارد")
+
+    # نقش
+    if hint_type in ("support", "resistance"):
+        role = hint_type
+    elif hint_type == "trendline":
+        role = "support" if level_price < price else "resistance"
+    else:
+        role = "support" if level_price < price else "resistance"
+
+    return {
+        "price": round(level_price, 2),
+        "role": role,
+        "valid": valid,
+        "strength": min(strength, 5),
+        "touches": touches,
+        "sys_match": sys_match,
+        "reasons": reasons,
+    }
+
+
+def analyze_user_levels(symbol, levels, interval="1h"):
+    """همه سطوح کاربر را تحلیل می‌کند"""
+    df = get_klines(symbol, interval, 300)
+    if df is None or len(df) < 60:
+        return {"error": "داده در دسترس نیست"}
+    if not levels:
+        return {"error": "هیچ سطحی وارد نشده"}
+
+    price = float(df["close"].iloc[-1])
+    results = []
+    valid_count = 0
+    bull_signals = 0
+    bear_signals = 0
+
+    for lv in levels:
+        try:
+            res = validate_level(df, float(lv["price"]), lv.get("type", "auto"))
+            results.append(res)
+            if res["valid"]:
+                valid_count += 1
+                if res["role"] == "support":
+                    bull_signals += res["strength"]
+                else:
+                    bear_signals += res["strength"]
+        except Exception as e:
+            results.append({"price": lv.get("price"), "valid": False,
+                            "role": "?", "reasons": ["خطا در تحلیل این سطح"]})
+
+    net = bull_signals - bear_signals
+    if valid_count == 0:
+        score_weight = 0
+        verdict = "هیچ سطح معتبری نبود — در تحلیل دخیل نمی‌شود"
+    elif net > 0:
+        score_weight = min(net * 3, 20)
+        verdict = f"سطوح معتبر تو تمایل صعودی نشان می‌دهند (+{score_weight} به SCORE)"
+    elif net < 0:
+        score_weight = max(net * 3, -20)
+        verdict = f"سطوح معتبر تو تمایل نزولی نشان می‌دهند ({score_weight} به SCORE)"
+    else:
+        score_weight = 0
+        verdict = "سطوح معتبر متعادل‌اند — اثر خنثی"
+
+    return {
+        "symbol": symbol,
+        "price": round(price, 2),
+        "levels": results,
+        "valid_count": valid_count,
+        "total_count": len(levels),
+        "score_weight": score_weight,
+        "verdict": verdict,
+        "net_direction": "bull" if net > 0 else "bear" if net < 0 else "neutral",
+    }
     """
     همه خط‌های کاربر را تحلیل می‌کند.
     lines: لیست [{"p1":{"time","price"}, "p2":{"time","price"}}, ...]

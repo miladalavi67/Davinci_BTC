@@ -21,7 +21,7 @@ from multitf import multi_tf_analysis
 from notify import notify_setup
 from learning import init_learning, record_prediction, evaluate_pending, get_stats
 from summary import btc_summary
-from userlines import analyze_user_lines
+from userlines import analyze_user_levels
 from auth import (init_auth, verify_user, create_user, change_password,
                  delete_user, list_users, login_required, admin_required)
 
@@ -259,20 +259,20 @@ def api_summary():
     return jsonify(cached(f"summary_{symbol}", do, ttl=90))
 
 
-@app.route("/api/analyze_lines", methods=["POST"])
+@app.route("/api/analyze_levels", methods=["POST"])
 @admin_required
-def api_analyze_lines():
-    """تحلیل خط‌های دستی کاربر (فقط ادمین) — می‌سنجد و دلیل می‌آورد"""
+def api_analyze_levels():
+    """سنجش سطوح دستی کاربر (فقط ادمین) — می‌سنجد و دلیل می‌آورد"""
     data = request.get_json(silent=True) or {}
     symbol = (data.get("symbol") or "BTCUSDT").upper()
-    lines = data.get("lines", [])
+    levels = data.get("levels", [])
     interval = data.get("interval", "1h")
     if symbol not in COINS:
         return jsonify({"error": "ارز نامعتبر"}), 400
-    if not lines:
-        return jsonify({"error": "هیچ خطی کشیده نشده"}), 400
+    if not levels:
+        return jsonify({"error": "هیچ سطحی وارد نشده"}), 400
     try:
-        result = analyze_user_lines(symbol, lines, interval)
+        result = analyze_user_levels(symbol, levels, interval)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": f"خطا در تحلیل: {e}"}), 500
